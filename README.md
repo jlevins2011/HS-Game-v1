@@ -1,10 +1,14 @@
 # ✨ Lumen Isles — Explore. Build. Shine.
 
-A 3D floating-island adventure for homeschool families. Kids explore, gather,
-build, garden, and befriend creatures across five sky isles — and school
-practice (reading, spelling, Latin, Bible, math) appears naturally inside the
-play as glowing **wonderstones**, **curio chests**, crafting challenges, and
-**Starfall** events they *want* to answer.
+A 3D floating-island adventure for homeschool families with its own visual
+identity: sculpted low-poly isles drifting in the sky, rounded storybook
+trees and creatures — no cubes in sight. Kids chop trees, quarry stone
+outcrops, salvage ruins, build real structures from walls, roofs, and
+stairs, span rope bridges across open sky, restore withered land at
+glowing **Lightsprings**, and descend into crystal grottos — and school
+practice (reading, spelling, Latin, Bible, math) appears naturally inside
+the play as floating **wonderstones**, **curio chests**, restoration
+rites, crafting challenges, and **Starfall** events they *want* to answer.
 
 Built for iPad touch (works in any modern browser, mouse + WASD too).
 No installs, no accounts, no ads, no chat. Progress saves on-device;
@@ -28,22 +32,37 @@ otherwise — to make the game 100% offline, download
 ## For kids
 
 Tap **➕ NEW EXPLORER**, pick a name and badge, and go. Left thumb walks
-(virtual joystick), right thumb looks around, tap to gather / talk / open.
-⬆️ jumps, 🎒 opens the pack, 🔨/🧱 switches gather and build mode.
+(virtual joystick), right thumb looks around, tap to interact — the prompt
+under the aim dot always says what a tap will do. ⬆️ jumps, 🎒 opens the
+satchel, 🛠️ opens build mode.
 
+- **The world is made of things, not blocks**: chop puffwood trees, quarry
+  stone outcrops and glowing ore veins, pick flowers and berries, salvage
+  old ruins — everything regrows, so the isles never run dry
+- **⛲ Lightsprings**: each isle has withered, gray zones around dormant
+  springs. Offer materials and answer the two-part **Rite of Light** to
+  reignite one — color floods back, flowers bloom, and the isle-light
+  meter fills. Restore them all and the **bridge anchors** awaken
+- **🌉 Sky bridges**: build rope-bridge spans from the anchors across open
+  sky to reach the isle's floating satellite islets
+- **🛠️ Building**: compose real structures from floors, walls, doorways,
+  windows, roofs, stairs, fences, planters, lantern posts, and a camp
+  tent (your respawn point) — pieces snap helpfully, and taking one back
+  refunds its materials
 - **🔮 Wonderstones** and **🧰 curio chests** hold challenges with spark + loot rewards
 - **Elder Alder** gives SUPER CHALLENGES that earn legendary tools — the
-  **Rootbreaker Drill** (opens The Hollow beneath the isle), the **Skyrider
-  Badge** (unlocks Cloudhaven Skydock and its airship), and the **Sunforged Mallet**
+  **Rootbreaker Drill** (opens the sealed crystal grotto beneath the isle),
+  the **Skyrider Badge** (unlocks Cloudhaven Skydock and its airship), and
+  the **Sunforged Mallet**
 - **Wren the Tinker**'s challenges unlock the **Sky Kiln** and **Lantern Kit**
 - **Finch and Poppy** give gathering quests; **Pip the fox** loves petting
   (and pickpockets when a challenge goes really badly)
-- **Garden beds** grow sunfruit and moonmelon from seeds — crops keep growing
+- **Planters** grow sunfruit and moonmelon from seeds — crops keep growing
   while away
 - Creatures (tuftles, puffbirds, shellhoppers, glowmoths) play chase and
   leave gifts; the brush collects tuftle fluff without the chase
-- Go quiet on learning for a while and **🌠 STARFALL** rolls in — answer the
-  wishing star's riddle to catch the sparks
+- Go quiet on learning for a while and **🌠 STARFALL** tumbles from the sky —
+  answer the wishing star's riddle to catch the sparks
 - New isles unlock with levels: Meadowmere → Ambershore → Frostspire →
   Mossveil → Starfen
 

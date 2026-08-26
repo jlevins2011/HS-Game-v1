@@ -34,23 +34,35 @@
     <span class="pill" id="level-label">Lv 1</span>
     <span class="pill" id="rank-label">Firefly Friend</span>
     <div id="xp-bar"><div id="xp-fill"></div></div>
+    <span class="pill" id="springs-label" style="display:none">🕯️ 0/3</span>
     <span class="pill" id="sparks-label">✨ 0</span>
   </div>
   <button id="btn-pause">☰</button>
   <div id="quest-hud"><span id="quest-hud-text"></span></div>
 
-  <div id="crosshair"></div>
-  <div id="gather-progress"><div id="gather-progress-fill"></div></div>
+  <div id="aim-dot"></div>
+  <div id="prompt"></div>
+  <div id="gain-popup"></div>
   <div id="toast"></div>
 
   <div id="joy-base"><div id="joy-knob"></div></div>
   <button class="action-btn" id="btn-jump">⬆️</button>
-  <button class="action-btn" id="btn-mode">🔨</button>
+  <button class="action-btn" id="btn-mode">🛠️</button>
   <button class="action-btn" id="btn-bag">🎒</button>
-  <button id="btn-craft">🛠️ TINKER!</button>
+  <button id="btn-craft">🔧 TINKER!</button>
   <button id="btn-kiln">🔥 KILN!</button>
-  <div id="hotbar"></div>
+
+  <div id="build-sheet">
+    <div id="build-pieces"></div>
+    <div id="build-actions">
+      <button class="build-act" id="build-rotate">⟳</button>
+      <button class="build-act" id="build-remove">🧹</button>
+      <button class="build-act done" id="build-done">✔</button>
+    </div>
+  </div>
 </div>
+
+<div id="fade"></div>
 
 <!-- ============ MODAL OVERLAY (challenges, dialogue, menus) ============ -->
 <div id="overlay"><div id="overlay-card"></div></div>
@@ -75,8 +87,10 @@ if (!window.THREE) {
 <script src="js/audio.js"></script>
 <script src="js/learning.js"></script>
 <script src="js/activities.js"></script>
-<script src="js/textures.js"></script>
-<script src="js/world.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/objects.js"></script>
+<script src="js/build.js"></script>
 <script src="js/player.js"></script>
 <script src="js/controls.js"></script>
 <script src="js/creatures.js"></script>

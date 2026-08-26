@@ -125,15 +125,14 @@ var Store = (function () {
   /* ---------------- per-child save ---------------- */
   function freshData() {
     return {
-      version: 1,
+      version: 2,
       player: {
         xp: 0, level: 1, sparks: 0,
-        toolTier: 0,               // 0 timber, 1 stone, 2 skysteel, 3 sunforged
+        toolTier: 0,               // mallet: 0 timber, 1 stone, 2 skysteel, 3 starstone
         isle: "meadowmere",
         inventory: {},             // itemName -> count
-        tools: {},                 // spade/hatchet/brush/kiln/lantern + legendary
-        seeds: {}                  // seedName -> count (garden)
-        // camp: { isle, x, z } set by sleeping in a bedroll
+        tools: {},                 // hatchet/brush/kiln/lanternkit + legendary
+        seeds: {}
       },
       elder: { wins: 0 },          // Elder Alder super-challenge wins
       tinker: { wins: 0 },         // Wren super-challenge wins
@@ -141,8 +140,9 @@ var Store = (function () {
         tiers: {},                 // cid -> { tier, tierWins, struggle }
         mastery: {}                // cid -> itemKey -> skill -> { box, win, miss, last }
       },
-      worlds: {},                  // isleId -> { edits: {"x,y,z": blockId} }
-      garden: {},                  // isleId -> { "x,z": { crop, stage, at } }
+      // per-isle world state: gathered objects (regrowing), built pieces,
+      // restored lightsprings, planted crops, connected bridges
+      isles: {},                   // isleId -> { removed:{}, pieces:[], springs:[], planters:{}, bridges:{} }
       quests: { active: null, completed: 0 },
       stats: {
         weekStart: Date.now(),
@@ -153,6 +153,28 @@ var Store = (function () {
         lifetime: { challenges: 0, clean: 0, sparks: 0, gathered: 0, built: 0, quests: 0, harvested: 0 }
       }
     };
+  }
+
+  // carry a v1 (voxel-era) save's progress into the new world format
+  function migrateV1(old) {
+    var d = freshData();
+    if (old.player) {
+      ["xp", "level", "sparks", "toolTier", "isle"].forEach(function (k) {
+        if (old.player[k] !== undefined) d.player[k] = old.player[k];
+      });
+      Object.keys(old.player.inventory || {}).forEach(function (k) {
+        if (window.ITEM_ICON && ITEM_ICON[k]) d.player.inventory[k] = old.player.inventory[k];
+      });
+      Object.keys(old.player.tools || {}).forEach(function (k) {
+        if (k !== "spade") d.player.tools[k] = old.player.tools[k];
+      });
+    }
+    if (old.elder) d.elder = deepMergeDefaults(freshData().elder, old.elder);
+    if (old.tinker) d.tinker = deepMergeDefaults(freshData().tinker, old.tinker);
+    if (old.learn) d.learn = deepMergeDefaults(freshData().learn, old.learn);
+    if (old.stats) d.stats = deepMergeDefaults(freshData().stats, old.stats);
+    if (old.quests) d.quests = { active: null, completed: old.quests.completed || 0 };
+    return d;
   }
 
   var data = freshData();
@@ -178,7 +200,8 @@ var Store = (function () {
       var raw = localStorage.getItem(activeKey);
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (parsed && parsed.version === 1) data = deepMergeDefaults(freshData(), parsed);
+        if (parsed && parsed.version === 2) data = deepMergeDefaults(freshData(), parsed);
+        else if (parsed && parsed.version === 1) data = migrateV1(parsed);
       }
     } catch (e) { /* corrupted -> fresh */ }
     Store.data = data;
@@ -224,14 +247,11 @@ var Store = (function () {
     return null;
   }
 
-  function worldEdits(isleId) {
-    if (!data.worlds[isleId]) data.worlds[isleId] = { edits: {} };
-    return data.worlds[isleId].edits;
-  }
-
-  function gardenPlots(isleId) {
-    if (!data.garden[isleId]) data.garden[isleId] = {};
-    return data.garden[isleId];
+  function isleState(isleId) {
+    if (!data.isles[isleId]) {
+      data.isles[isleId] = { removed: {}, pieces: [], springs: [], planters: {}, bridges: {} };
+    }
+    return data.isles[isleId];
   }
 
   /* ---------------- backup / restore ---------------- */
@@ -263,7 +283,7 @@ var Store = (function () {
     allCurricula: allCurricula, curriculum: curriculum,
     addCustomCurriculum: addCustomCurriculum, removeCustomCurriculum: removeCustomCurriculum,
     load: load, save: save, saveNow: saveNow, reset: reset, peek: peek, peekSave: peekSave,
-    worldEdits: worldEdits, gardenPlots: gardenPlots,
+    isleState: isleState,
     exportAll: exportAll, importAll: importAll,
     data: data, profile: profile
   };

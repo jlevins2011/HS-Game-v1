@@ -22,61 +22,60 @@ var Creatures = (function () {
     glowmoth:   { taps: 2, gifts: { glowdust: 2 }, emoji: "✨", cheer: "The glowmoth sprinkles glowdust as it twirls!" }
   };
 
-  function mat(color) { return new THREE.MeshLambertMaterial({ color: color }); }
-
-  function box(group, w, h, d, m, x, y, z) {
-    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-    mesh.position.set(x, y, z);
-    group.add(mesh);
-    return mesh;
-  }
-
   function buildCreature(type) {
     var g = new THREE.Group();
+    var b = new Geo.Builder();
     var extra = {};
+    var DARK = 0x2b2b2b;
     if (type === "tuftle") {
-      var body = mat(0xd9b88a), moss = mat(0x6fbc53), eye = mat(0x2b2b2b);
-      box(g, 0.42, 0.3, 0.5, body, 0, 0.28, 0);
-      box(g, 0.4, 0.16, 0.44, moss, 0, 0.48, -0.02);     // mossy tuft back
-      box(g, 0.16, 0.12, 0.14, moss, 0, 0.58, 0.02);
-      box(g, 0.2, 0.18, 0.18, body, 0, 0.34, 0.32);      // head
-      box(g, 0.04, 0.04, 0.02, eye, -0.06, 0.38, 0.42);
-      box(g, 0.04, 0.04, 0.02, eye, 0.06, 0.38, 0.42);
-      [[-0.13, 0.17], [0.13, 0.17], [-0.13, -0.17], [0.13, -0.17]].forEach(function (p) {
-        box(g, 0.1, 0.16, 0.1, body, p[0], 0.08, p[1]);
-      });
-      extra.tuft = true;
+      b.blob(0.26, 0xd9b88a, { y: 0.1, sz: 1.3, sy: 0.85 }, 0.12, 0.12);        // body
+      b.blob(0.24, 0x6fbc53, { y: 0.28, sz: 1.1, sy: 0.6 }, 0.15, 0.25);        // mossy shell
+      b.blob(0.07, 0x8fd672, { y: 0.42, x: 0.05 }, 0.1, 0.2);                    // sprout
+      b.blob(0.12, 0xd9b88a, { y: 0.18, z: 0.32 }, 0.1, 0);                      // head
+      b.blob(0.024, DARK, { x: -0.05, y: 0.22, z: 0.42 }, 0, 0);
+      b.blob(0.024, DARK, { x: 0.05, y: 0.22, z: 0.42 }, 0, 0);
+      for (var i = 0; i < 4; i++) {
+        b.cyl(0.04, 0.035, 0.1, 4, 0xc0a274, { x: (i % 2 ? 0.11 : -0.11), z: (i < 2 ? 0.14 : -0.14) }, 0, 0);
+      }
     } else if (type === "puffbird") {
-      var puff = mat(0xf2c9d8), belly = mat(0xfbeff4), beak = mat(0xe8a23a), eye2 = mat(0x2b2b2b);
-      box(g, 0.3, 0.3, 0.34, puff, 0, 0.32, 0);
-      box(g, 0.22, 0.18, 0.2, belly, 0, 0.26, 0.1);
-      box(g, 0.2, 0.2, 0.18, puff, 0, 0.54, 0.12);
-      box(g, 0.06, 0.05, 0.1, beak, 0, 0.53, 0.26);
-      box(g, 0.04, 0.04, 0.02, eye2, -0.06, 0.58, 0.2);
-      box(g, 0.04, 0.04, 0.02, eye2, 0.06, 0.58, 0.2);
-      box(g, 0.1, 0.16, 0.06, puff, -0.2, 0.34, -0.04);  // wings
-      box(g, 0.1, 0.16, 0.06, puff, 0.2, 0.34, -0.04);
-      box(g, 0.05, 0.1, 0.05, beak, -0.06, 0.1, 0);
-      box(g, 0.05, 0.1, 0.05, beak, 0.06, 0.1, 0);
+      b.blob(0.2, 0xf2c9d8, { y: 0.22, sy: 1.1 }, 0.12, 0.15);                   // puffball body
+      b.blob(0.13, 0xfbeff4, { y: 0.16, z: 0.1 }, 0.1, 0.1);                     // belly
+      b.blob(0.12, 0xf2c9d8, { y: 0.47, z: 0.1 }, 0.1, 0.1);                     // head
+      b.cone(0.045, 0.1, 4, 0xe8a23a, { y: 0.46, z: 0.22, rx: Math.PI / 2 }, 0, 0);
+      b.blob(0.025, DARK, { x: -0.05, y: 0.51, z: 0.19 }, 0, 0);
+      b.blob(0.025, DARK, { x: 0.05, y: 0.51, z: 0.19 }, 0, 0);
+      b.blob(0.08, 0xe8b2c8, { x: -0.19, y: 0.26, sy: 1.4, sz: 0.7 }, 0.1, 0);   // wings
+      b.blob(0.08, 0xe8b2c8, { x: 0.19, y: 0.26, sy: 1.4, sz: 0.7 }, 0.1, 0);
+      b.cyl(0.02, 0.02, 0.1, 3, 0xe8a23a, { x: -0.05 }, 0, 0);
+      b.cyl(0.02, 0.02, 0.1, 3, 0xe8a23a, { x: 0.05 }, 0, 0);
     } else if (type === "shellhopper") {
-      var shell = mat(0x7ac0d9), swirl = mat(0xd9f2fb), body2 = mat(0xe8cfa5), eye3 = mat(0x2b2b2b);
-      box(g, 0.4, 0.34, 0.4, shell, 0, 0.4, -0.04);
-      box(g, 0.2, 0.12, 0.2, swirl, 0, 0.6, -0.04);
-      box(g, 0.3, 0.2, 0.24, body2, 0, 0.2, 0.2);
-      box(g, 0.04, 0.04, 0.02, eye3, -0.06, 0.26, 0.32);
-      box(g, 0.04, 0.04, 0.02, eye3, 0.06, 0.26, 0.32);
-      [[-0.1, 0.14], [0.1, 0.14]].forEach(function (p) {
-        box(g, 0.08, 0.12, 0.08, body2, p[0], 0.06, p[1]);
-      });
+      b.blob(0.24, 0x7ac0d9, { y: 0.26, sy: 0.95 }, 0.12, 0.15);                 // shell
+      b.blob(0.12, 0xd9f2fb, { y: 0.42, sy: 0.6 }, 0.1, 0.15);                   // swirl top
+      b.blob(0.14, 0xe8cfa5, { y: 0.12, z: 0.22, sy: 0.8 }, 0.1, 0.1);           // body/head
+      b.blob(0.024, DARK, { x: -0.05, y: 0.18, z: 0.33 }, 0, 0);
+      b.blob(0.024, DARK, { x: 0.05, y: 0.18, z: 0.33 }, 0, 0);
+      b.cyl(0.035, 0.03, 0.1, 4, 0xd9b88a, { x: -0.07, z: 0.14 }, 0, 0);
+      b.cyl(0.035, 0.03, 0.1, 4, 0xd9b88a, { x: 0.07, z: 0.14 }, 0, 0);
     } else { // glowmoth
-      var wing = mat(0xd9c2f2), glow = mat(0xfff3c4), body3 = mat(0x8a7ae8);
-      box(g, 0.12, 0.26, 0.12, body3, 0, 0.4, 0);
-      box(g, 0.26, 0.2, 0.04, wing, -0.18, 0.46, 0);
-      box(g, 0.26, 0.2, 0.04, wing, 0.18, 0.46, 0);
-      box(g, 0.08, 0.08, 0.08, glow, 0, 0.24, 0);
+      b.blob(0.07, 0x8a7ae8, { y: 0.34, sy: 1.8 }, 0.1, 0.1);                    // body
+      b.blob(0.06, 0xfff3c4, { y: 0.18 }, 0, 0);                                  // glow lamp
+      b.blob(0.02, DARK, { x: -0.03, y: 0.48, z: 0.05 }, 0, 0);
+      b.blob(0.02, DARK, { x: 0.03, y: 0.48, z: 0.05 }, 0, 0);
       extra.flies = true;
-      extra.wingL = g.children[1];
-      extra.wingR = g.children[2];
+    }
+    g.add(b.build());
+    if (type === "glowmoth") {
+      // wings as separate little meshes so they can flap
+      function wing(sx) {
+        var wb = new Geo.Builder();
+        wb.blob(0.14, 0xd9c2f2, { x: sx * 0.13, sy: 0.5, sx: 1.6 }, 0.1, 0.1);
+        var m = wb.build();
+        m.position.set(0, 0.42, 0);
+        g.add(m);
+        return m;
+      }
+      extra.wingL = wing(-1);
+      extra.wingR = wing(1);
     }
     var hit = new THREE.Mesh(
       new THREE.BoxGeometry(0.9, 1.1, 1.1),
@@ -88,15 +87,15 @@ var Creatures = (function () {
   }
 
   function groundY(x, z) {
-    var y = World.surfaceY(Math.floor(x), Math.floor(z));
-    return y > 0 ? y + 1 : -1;
+    var y = Terrain.heightAt(x, z);
+    return y > -100 ? y : -1;
   }
 
   function isGoodSpot(x, z) {
-    var y = World.surfaceY(Math.floor(x), Math.floor(z));
-    if (y <= 0) return false;
-    return World.getBlock(Math.floor(x), y + 1, Math.floor(z)) !== B.WATER &&
-           World.getBlock(Math.floor(x), y, Math.floor(z)) !== B.WATER;
+    var y = Terrain.heightAt(x, z);
+    if (y < -100) return false;
+    if (Terrain.def.water > 0 && y < Terrain.def.water + 0.3) return false;
+    return Terrain.slopeAt(x, z) < 1.0;
   }
 
   var spawnCounter = 0;
@@ -105,8 +104,8 @@ var Creatures = (function () {
     var type = names[spawnCounter++ % names.length];
     var x, z, tries = 0;
     do {
-      x = 20 + Math.random() * 88;
-      z = 20 + Math.random() * 88;
+      x = 12 + Math.random() * (Terrain.SX - 24);
+      z = 12 + Math.random() * (Terrain.SZ - 24);
       tries++;
     } while (!isGoodSpot(x, z) && tries < 20);
     if (!isGoodSpot(x, z)) return;
@@ -146,8 +145,8 @@ var Creatures = (function () {
       if (a.moveT <= 0 && !fleeing) {
         a.moveT = 3 + Math.random() * 5;
         a.target = {
-          x: Math.max(3, Math.min(125, a.home.x + (Math.random() * 10 - 5))),
-          z: Math.max(3, Math.min(125, a.home.z + (Math.random() * 10 - 5)))
+          x: Math.max(3, Math.min(Terrain.SX - 3, a.home.x + (Math.random() * 10 - 5))),
+          z: Math.max(3, Math.min(Terrain.SX - 3, a.home.z + (Math.random() * 10 - 5)))
         };
       }
       if (a.target) {
@@ -199,8 +198,8 @@ var Creatures = (function () {
     var dx = a.group.position.x - playerPos.x, dz = a.group.position.z - playerPos.z;
     var len = Math.hypot(dx, dz) || 1;
     a.target = {
-      x: Math.max(3, Math.min(125, a.group.position.x + (dx / len) * 9 + (Math.random() * 4 - 2))),
-      z: Math.max(3, Math.min(125, a.group.position.z + (dz / len) * 9 + (Math.random() * 4 - 2)))
+      x: Math.max(3, Math.min(Terrain.SX - 3, a.group.position.x + (dx / len) * 9 + (Math.random() * 4 - 2))),
+      z: Math.max(3, Math.min(Terrain.SX - 3, a.group.position.z + (dz / len) * 9 + (Math.random() * 4 - 2)))
     };
     a.home = { x: a.target.x, z: a.target.z };
     a.fleeUntil = performance.now() + 2600;

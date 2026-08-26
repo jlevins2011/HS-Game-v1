@@ -66,35 +66,26 @@ var NPCs = (function () {
   }
 
   // Pip: a little orange fox with a white chest and black paws
+  // Pip: a little fox of soft rounded shapes
   function buildFox(def) {
     var group = new THREE.Group();
-    var orange = new THREE.MeshLambertMaterial({ color: 0xe8813a });
-    var white = new THREE.MeshLambertMaterial({ color: 0xf7f2e8 });
-    var black = new THREE.MeshLambertMaterial({ color: 0x2b2b2b });
-
-    function box(w, h, d, mat, x, y, z) {
-      var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-      m.position.set(x, y, z);
-      group.add(m);
-      return m;
+    var g = new Geo.Builder();
+    var ORANGE = 0xe8813a, WHITE = 0xf7f2e8, DARK = 0x2b2b2b;
+    g.blob(0.3, ORANGE, { y: 0.12, sz: 1.5, sy: 0.8 }, 0.15, 0.15);          // body
+    g.blob(0.17, WHITE, { y: 0.1, z: 0.28, sy: 0.8 }, 0.1, 0.1);            // chest
+    g.blob(0.19, ORANGE, { y: 0.48, z: 0.34 }, 0.15, 0.1);                   // head
+    g.blob(0.07, WHITE, { y: 0.42, z: 0.5 }, 0.1, 0);                        // muzzle
+    g.blob(0.035, DARK, { y: 0.44, z: 0.56 }, 0, 0);                         // nose
+    g.blob(0.028, DARK, { x: -0.07, y: 0.53, z: 0.48 }, 0, 0);               // eyes
+    g.blob(0.028, DARK, { x: 0.07, y: 0.53, z: 0.48 }, 0, 0);
+    g.cone(0.07, 0.16, 4, ORANGE, { x: -0.09, y: 0.6, z: 0.32 }, 0.1, 0);    // ears
+    g.cone(0.07, 0.16, 4, ORANGE, { x: 0.09, y: 0.6, z: 0.32 }, 0.1, 0);
+    g.blob(0.11, ORANGE, { y: 0.2, z: -0.42, sz: 1.9, sy: 0.7 }, 0.15, 0.1); // fluffy tail
+    g.blob(0.08, WHITE, { y: 0.22, z: -0.62 }, 0.1, 0);                      // tail tip
+    for (var i = 0; i < 4; i++) {
+      g.cyl(0.045, 0.04, 0.14, 4, DARK, { x: (i % 2 ? 0.1 : -0.1), z: (i < 2 ? 0.16 : -0.16) }, 0, 0);
     }
-    // legs (black socks)
-    box(0.09, 0.2, 0.09, black, -0.1, 0.1, 0.16);
-    box(0.09, 0.2, 0.09, black, 0.1, 0.1, 0.16);
-    box(0.09, 0.2, 0.09, black, -0.1, 0.1, -0.16);
-    box(0.09, 0.2, 0.09, black, 0.1, 0.1, -0.16);
-    // body + white chest
-    box(0.26, 0.24, 0.54, orange, 0, 0.32, 0);
-    box(0.2, 0.16, 0.16, white, 0, 0.3, 0.26);
-    // head + snout + ears
-    box(0.22, 0.2, 0.2, orange, 0, 0.5, 0.32);
-    box(0.1, 0.08, 0.1, white, 0, 0.46, 0.46);
-    box(0.04, 0.04, 0.03, black, 0, 0.49, 0.52);
-    box(0.07, 0.1, 0.04, orange, -0.08, 0.64, 0.3);
-    box(0.07, 0.1, 0.04, orange, 0.08, 0.64, 0.3);
-    // big fluffy tail with white tip
-    box(0.1, 0.1, 0.26, orange, 0, 0.36, -0.4);
-    box(0.08, 0.08, 0.1, white, 0, 0.36, -0.56);
+    group.add(g.build());
 
     var label = makeNameSprite(def.name);
     label.scale.set(1.1, 0.28, 1);
@@ -110,100 +101,61 @@ var NPCs = (function () {
     return { group: group, hitbox: hit };
   }
 
+  // people: soft rounded figures — bell-shaped bodies, round heads
   function buildModel(def) {
     if (def.fox) return buildFox(def);
     var group = new THREE.Group();
-    var skin = new THREE.MeshLambertMaterial({ color: 0xf2c9a0 });
-    var shirt = new THREE.MeshLambertMaterial({ color: def.shirt });
-    var pants = new THREE.MeshLambertMaterial({ color: 0x3a4a6b });
-    var hair = new THREE.MeshLambertMaterial({ color: def.hair });
-    var face = new THREE.MeshLambertMaterial({
-      map: makeFaceTexture(def.hair, { beard: def.elder, goggles: def.tinker })
-    });
+    var g = new Geo.Builder();
+    var SKIN = 0xf2c9a0, DARKEYE = 0x33302c;
+    var shirt = parseInt(def.shirt.slice(1), 16);
+    var hair = parseInt(def.hair.slice(1), 16);
+    var tall = def.elder ? 1.25 : (def.tinker ? 1.1 : 1.0);
 
-    function box(w, h, d, mats, x, y, z) {
-      var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats);
-      m.position.set(x, y, z);
-      group.add(m);
-      return m;
+    // bell body (robe/tunic)
+    g.cyl(0.42 * tall, 0.2 * tall, 1.05 * tall, 7, shirt, {}, 0.12, 0.12);
+    // arms: soft stubs
+    g.blob(0.11 * tall, shirt, { x: -0.4 * tall, y: 0.78 * tall, sy: 1.6 }, 0.1, 0.1);
+    g.blob(0.11 * tall, shirt, { x: 0.4 * tall, y: 0.78 * tall, sy: 1.6 }, 0.1, 0.1);
+    g.blob(0.07 * tall, SKIN, { x: -0.42 * tall, y: 0.62 * tall }, 0.05, 0);
+    g.blob(0.07 * tall, SKIN, { x: 0.42 * tall, y: 0.62 * tall }, 0.05, 0);
+    // head
+    var headY = 1.08 * tall;
+    g.blob(0.26 * tall, SKIN, { y: headY }, 0.08, 0.05);
+    // eyes on +z face
+    g.blob(0.032, DARKEYE, { x: -0.09 * tall, y: headY + 0.28 * tall, z: 0.21 * tall }, 0, 0);
+    g.blob(0.032, DARKEYE, { x: 0.09 * tall, y: headY + 0.28 * tall, z: 0.21 * tall }, 0, 0);
+    // rosy cheeks
+    g.blob(0.035, 0xe8a68a, { x: -0.15 * tall, y: headY + 0.2 * tall, z: 0.18 * tall }, 0, 0);
+    g.blob(0.035, 0xe8a68a, { x: 0.15 * tall, y: headY + 0.2 * tall, z: 0.18 * tall }, 0, 0);
+    // hair cap
+    g.blob(0.27 * tall, hair, { y: headY + 0.12 * tall, sy: 0.75 }, 0.1, 0.12);
+    if (!def.boy && !def.elder) {
+      g.blob(0.2 * tall, hair, { y: headY + 0.05, z: -0.2 * tall, sy: 1.5 }, 0.1, 0.12);   // long hair
     }
-
     if (def.elder) {
-      // Elder Alder: tall, long robe, staff with a glowing lantern
-      var robe = new THREE.MeshLambertMaterial({ color: def.shirt });
-      box(0.6, 1.3, 0.34, robe, 0, 0.65, 0);                     // long robe
-      box(0.17, 0.6, 0.17, robe, -0.4, 1.05, 0);                 // sleeves
-      box(0.17, 0.6, 0.17, robe, 0.4, 1.05, 0);
-      var headMatsE = [hair, hair, hair, hair, face, hair];
-      box(0.46, 0.46, 0.46, headMatsE, 0, 1.68, 0);
-      box(0.5, 0.12, 0.5, hair, 0, 1.94, 0);                     // silver hair
-      // staff + lantern
-      var staff = new THREE.MeshLambertMaterial({ color: 0x6e5033 });
-      var glow = new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xcc9a3a });
-      box(0.07, 1.7, 0.07, staff, 0.52, 0.9, 0.12);
-      box(0.16, 0.16, 0.16, glow, 0.52, 1.82, 0.12);
-      var labelE = makeNameSprite(def.name);
-      labelE.position.set(0, 2.35, 0);
-      group.add(labelE);
-      var hitE = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 2.4, 1.1),
-        new THREE.MeshBasicMaterial({ visible: false })
-      );
-      hitE.position.set(0, 1.2, 0);
-      group.add(hitE);
-      return { group: group, hitbox: hitE };
+      // long silver beard + staff with a glowing lantern
+      g.blob(0.2 * tall, hair, { y: headY - 0.02, z: 0.14 * tall, sy: 1.5, sx: 0.8 }, 0.1, 0.1);
+      g.cyl(0.045, 0.035, 1.9, 5, 0x6e5033, { x: 0.55, z: 0.1 }, 0.1, 0);
+      g.blob(0.12, 0xffe08a, { x: 0.55, y: 1.95, z: 0.1 }, 0, 0);
+      g.cone(0.16, 0.12, 5, 0x8a6540, { x: 0.55, y: 2.05, z: 0.1 }, 0.1, 0);
     }
-
     if (def.tinker) {
-      // Wren: apron, tool belt, goggles pushed onto her forehead
-      box(0.22, 0.6, 0.22, pants, -0.14, 0.3, 0);
-      box(0.22, 0.6, 0.22, pants, 0.14, 0.3, 0);
-      box(0.5, 0.65, 0.28, shirt, 0, 0.92, 0);
-      var apron = new THREE.MeshLambertMaterial({ color: 0x8a6540 });
-      box(0.42, 0.5, 0.06, apron, 0, 0.85, 0.16);
-      var belt = new THREE.MeshLambertMaterial({ color: 0x5e4429 });
-      box(0.54, 0.1, 0.32, belt, 0, 0.62, 0);
-      box(0.16, 0.58, 0.16, skin, -0.34, 0.9, 0);
-      box(0.16, 0.5, 0.16, skin, 0.36, 0.95, 0.12);              // arm forward with wrench
-      var tool = new THREE.MeshLambertMaterial({ color: 0x9aa2ad });
-      box(0.06, 0.22, 0.06, tool, 0.42, 1.2, 0.28);
-      var headMatsW = [hair, hair, hair, hair, face, hair];
-      box(0.45, 0.45, 0.45, headMatsW, 0, 1.5, 0);
-      box(0.49, 0.12, 0.49, hair, 0, 1.76, 0);
-      var gog = new THREE.MeshLambertMaterial({ color: 0xd9b23a });
-      box(0.47, 0.08, 0.1, gog, 0, 1.68, 0.2);                   // goggles on forehead
-      var labelW = makeNameSprite(def.name);
-      labelW.position.set(0, 2.15, 0);
-      group.add(labelW);
-      var hitW = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 2.3, 1.1),
-        new THREE.MeshBasicMaterial({ visible: false })
-      );
-      hitW.position.set(0, 1.1, 0);
-      group.add(hitW);
-      return { group: group, hitbox: hitW };
+      // leather apron + goggles pushed up
+      g.cyl(0.34 * tall, 0.24 * tall, 0.6 * tall, 6, 0x8a6540, { y: 0.28 * tall, z: 0.06 }, 0.1, 0);
+      g.cyl(0.26 * tall, 0.26 * tall, 0.09, 7, 0xd9b23a, { y: headY + 0.34 * tall }, 0.05, 0);
+      g.blob(0.07, 0x9aa2ad, { x: 0.45 * tall, y: 0.68 * tall, z: 0.15 }, 0, 0);   // wrench in hand
     }
-
-    // quest kids
-    box(0.22, 0.55, 0.22, pants, -0.14, 0.275, 0);
-    box(0.22, 0.55, 0.22, pants, 0.14, 0.275, 0);
-    box(0.5, 0.6, 0.28, shirt, 0, 0.85, 0);
-    box(0.16, 0.55, 0.16, skin, -0.34, 0.85, 0);
-    box(0.16, 0.55, 0.16, skin, 0.34, 0.85, 0);
-    var headMats = [hair, hair, hair, hair, face, hair];
-    box(0.45, 0.45, 0.45, headMats, 0, 1.4, 0);
-    box(0.49, 0.12, 0.49, hair, 0, 1.66, 0);
-    if (!def.boy) box(0.45, 0.5, 0.1, hair, 0, 1.3, -0.24);
+    group.add(g.build());
 
     var label = makeNameSprite(def.name);
-    label.position.set(0, 2.05, 0);
+    label.position.set(0, (def.elder ? 2.45 : 2.05), 0);
     group.add(label);
 
     var hit = new THREE.Mesh(
-      new THREE.BoxGeometry(1.0, 2.1, 1.0),
+      new THREE.BoxGeometry(1.0, 2.1 * tall, 1.0),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    hit.position.set(0, 1.0, 0);
+    hit.position.set(0, 1.0 * tall, 0);
     group.add(hit);
 
     return { group: group, hitbox: hit };
@@ -232,8 +184,12 @@ var NPCs = (function () {
   }
 
   function positionOnGround(n, x, z) {
-    var g = World.groundNear(x, z);
-    n.group.position.set(x, g.y + 1, z);
+    var y = Terrain.heightAt(x, z);
+    if (y < -100 || (Terrain.def.water > 0 && y < Terrain.def.water)) {
+      var g = Terrain.groundNear(x, z);
+      x = g.x; z = g.z; y = g.y;
+    }
+    n.group.position.set(x, y, z);
   }
 
   function update(dt, playerPos) {
@@ -299,9 +255,9 @@ var NPCs = (function () {
 var QUEST_DEFS = [
   { tier: 0, text: "Can you get me 3 timber?",              ask: "timber",    count: 3, icon: "🪵", decoys: ["🪨", "🌼"] },
   { tier: 0, text: "I want 2 sunpetal flowers!",            ask: "sunpetal",  count: 2, icon: "🌼", decoys: ["🪵", "🐚"] },
-  { tier: 0, text: "Please dig up 3 earth for me.",         ask: "earth",     count: 3, icon: "🟫", decoys: ["🌼", "⬜"] },
-  { tier: 1, text: "I need 4 stone to build a step.",       ask: "stone",     count: 4, icon: "🪨", decoys: ["🪵", "🟫"] },
-  { tier: 1, text: "Can you find 3 cloudsand by the pond?", ask: "cloudsand", count: 3, icon: "🟨", decoys: ["🪨", "🌼"] },
+  { tier: 0, text: "I need 2 stone for my firepit.",        ask: "stone",     count: 2, icon: "🪨", decoys: ["🌼", "🪵"] },
+  { tier: 1, text: "I need 4 stone to build a step.",       ask: "stone",     count: 4, icon: "🪨", decoys: ["🪵", "🍃"] },
+  { tier: 1, text: "Find 2 shiny shells from shellhoppers!", ask: "shell",    count: 2, icon: "🐚", decoys: ["🪨", "🌼"] },
   { tier: 1, text: "Bring me 4 leaves from a tree.",        ask: "leaves",    count: 4, icon: "🍃", decoys: ["🟨", "🪨"] },
   { tier: 1, text: "I am hungry! Please pick 3 berries.",   ask: "berries",   count: 3, icon: "🫐", decoys: ["🍃", "🌼"] },
   { tier: 2, text: "I would like 5 timber for my house.",   ask: "timber",    count: 5, icon: "🪵", decoys: ["🧱", "🍃"] },

@@ -1,68 +1,60 @@
 "use strict";
 /* ============================================================
-   GAME — three.js setup, the main loop, and interaction rules:
-   what happens when a Keeper taps a block, a wonderstone, a
-   curio chest, a creature, or a friend.
+   GAME — scene setup, the main loop, and the moment-to-moment
+   grammar of Lumen Isles:
+
+   tap a TREE and chop it · tap an OUTCROP and quarry it ·
+   tap a WONDERSTONE and answer it · relight LIGHTSPRINGS to
+   heal withered land · build bridges to floating islets ·
+   descend into the sealed grotto · catch falling stars.
    ============================================================ */
 var Game = (function () {
   var scene, camera, renderer;
   var sun, ambient, hemi, keeperGlow;
-  var cloudsAbove = [], cloudsBelow = [];
+  var clouds = [];
   var running = false;
-  var mode = "gather";          // "gather" | "build"
-  var selectedItem = null;
-  var highlightBox = null;
-  var gathering = null;         // { x,y,z, until, total, def }
   var npcRaycaster = new THREE.Raycaster();
+  var currentIsleState = null;
 
   /* ---------------- setup ---------------- */
   function init() {
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 300);
-    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("game-canvas"), antialias: false });
+    camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 420);
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("game-canvas"), antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    ambient = new THREE.AmbientLight(0xffffff, 0.45);
-    hemi = new THREE.HemisphereLight(0xbfd9ff, 0x8a6a4a, 0.35);
-    sun = new THREE.DirectionalLight(0xfff2cc, 0.85);
+    ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    hemi = new THREE.HemisphereLight(0xbfd9ff, 0x8a7a5e, 0.45);
+    sun = new THREE.DirectionalLight(0xfff2cc, 0.8);
     sun.position.set(60, 100, 40);
     scene.add(ambient, hemi, sun);
 
-    // the keeper's glow: a soft light that follows the player underground
-    // so The Hollow is dim and mysterious but never unreadably black
-    keeperGlow = new THREE.PointLight(0xaed4ff, 0, 12, 1.6);
+    keeperGlow = new THREE.PointLight(0xaed4ff, 0, 13, 1.6);
     scene.add(keeperGlow);
 
-    // block highlight outline
-    var hlGeo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
-    var hlEdges = new THREE.EdgesGeometry(hlGeo);
-    highlightBox = new THREE.LineSegments(hlEdges,
-      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
-    highlightBox.visible = false;
-    scene.add(highlightBox);
-
-    // clouds above — and clouds BELOW the isle, so it truly floats
-    var cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
-    var lowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
-    for (var i = 0; i < 10; i++) {
-      var w = 6 + Math.random() * 10, d = 4 + Math.random() * 6;
-      var cloud = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), cloudMat);
-      cloud.position.set(Math.random() * 128, 46 + Math.random() * 5, Math.random() * 128);
+    // soft cloud puffs — rounded, never boxes
+    for (var i = 0; i < 16; i++) {
+      var g = new Geo.Builder();
+      var w = 3 + Math.random() * 6;
+      g.blob(w, 0xffffff, { sy: 0.45 }, 0.06, 0.25);
+      g.blob(w * 0.6, 0xffffff, { x: w * 0.8, y: 0.4, sy: 0.5 }, 0.06, 0.25);
+      g.blob(w * 0.5, 0xffffff, { x: -w * 0.7, y: 0.2, sy: 0.5 }, 0.06, 0.25);
+      var mat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82 });
+      var cloud = g.build(mat);
+      var below = i >= 8;
+      cloud.position.set(Math.random() * 260 - 30, below ? -30 - Math.random() * 18 : 42 + Math.random() * 12, Math.random() * 260 - 30);
+      cloud.userData.speed = 0.5 + Math.random() * 0.8;
       scene.add(cloud);
-      cloudsAbove.push(cloud);
+      clouds.push(cloud);
     }
-    for (var j = 0; j < 14; j++) {
-      var w2 = 10 + Math.random() * 18, d2 = 8 + Math.random() * 12;
-      var below = new THREE.Mesh(new THREE.BoxGeometry(w2, 1.6, d2), lowMat);
-      below.position.set(Math.random() * 180 - 26, -26 - Math.random() * 12, Math.random() * 180 - 26);
-      scene.add(below);
-      cloudsBelow.push(below);
-    }
+
+    initParticles();
 
     window.__dbg = { scene: scene, camera: camera, renderer: renderer };
 
-    World.init(scene);
+    Terrain.init(scene);
+    Objects.init(scene);
     NPCs.init(scene);
     Creatures.init(scene);
     Player.init(camera);
@@ -81,18 +73,21 @@ var Game = (function () {
   function travelTo(isleId) {
     Store.data.player.isle = isleId;
     Store.save();
-    var def = World.loadIsle(isleId);
+    currentIsleState = Store.isleState(isleId);
+    var def = Terrain.loadIsle(isleId, currentIsleState);
+    Objects.populate(def, currentIsleState);
+    Build.load(scene, currentIsleState);
+    Garden.load(currentIsleState);
     scene.background = new THREE.Color(def.sky);
-    scene.fog = new THREE.Fog(def.fog, 70, 260);
-    var sx = (def.spawn && def.spawn.x) || Math.floor(World.SX / 2);
-    var sz = (def.spawn && def.spawn.z) || Math.floor(World.SZ / 2);
+    scene.fog = new THREE.Fog(def.fog, 80, 320);
+    var sx = (def.spawn && def.spawn.x) || Terrain.CX;
+    var sz = (def.spawn && def.spawn.z) || Terrain.CZ;
     Player.spawnAt(sx, sz, def.spawn && def.spawn.yaw);
     NPCs.placeAll(sx, sz);
     Creatures.populate();
-    Garden.restore();
-    rebuildLanternLights();
     UI.toast(def.emoji + " Welcome to " + def.name + "!");
     GameAudio.say("Welcome to " + def.name + "!");
+    UI.updateHud();
   }
 
   function start() {
@@ -103,13 +98,21 @@ var Game = (function () {
     travelTo(Store.data.player.isle || "meadowmere");
     Controls.setEnabled(true);
     UI.updateHud();
-    UI.updateHotbar();
     UI.updateQuestHud();
-    UI.updateModeButton();
     Reports.maybeAutoSend();
   }
 
-  /* ---------------- rewards / leveling ---------------- */
+  function stop() {
+    running = false;
+    Game.running = false;
+    Controls.setEnabled(false);
+    Build.exitMode();
+    UI.hideBuildSheet();
+    Stats.tickPlaytime();
+    Store.saveNow();
+  }
+
+  /* ---------------- rewards ---------------- */
   function grantXP(amount) {
     var p = Store.data.player;
     p.xp += amount;
@@ -136,120 +139,108 @@ var Game = (function () {
     var inv = Store.data.player.inventory;
     inv[item] = (inv[item] || 0) + count;
     Store.save();
-    UI.updateHotbar();
     UI.updateQuestHud();
+    UI.updateBuildSheet();
   }
 
   /* ---------------- interaction ---------------- */
-  var TOOL_SPEED = [1, 1.5, 2.1, 3.0];   // timber, stone, skysteel, sunforged mallets
-
   function interact() {
-    if (!running || gathering) return;
+    if (!running) return;
 
-    var hit = Player.raycastBlock(CONFIG.MOVE.reach);
-
-    // friends take priority unless a block is clearly in front of them
-    npcRaycaster.setFromCamera({ x: 0, y: 0 }, camera);
-    npcRaycaster.far = 5;
-    var npcHits = npcRaycaster.intersectObjects(NPCs.hitboxes(), false);
-    if (npcHits.length && (!hit || npcHits[0].distance < hit.distance + 0.4)) {
-      UI.showDialogue(npcHits[0].object.userData.npc);
+    if (Build.mode) {
+      if (Build.removeMode) Build.removeAim();
+      else Build.place();
       return;
     }
 
-    // then creatures
+    // friends first
+    npcRaycaster.setFromCamera({ x: 0, y: 0 }, camera);
+    npcRaycaster.far = 5;
+    var npcHits = npcRaycaster.intersectObjects(NPCs.hitboxes(), false);
+    var objHit = Objects.raycast(npcRaycaster.ray.origin, npcRaycaster.ray.direction, CONFIG.MOVE.reach);
+    if (npcHits.length && (!objHit || npcHits[0].distance < objHit.dist + 0.4)) {
+      UI.showDialogue(npcHits[0].object.userData.npc);
+      return;
+    }
     var critterHits = npcRaycaster.intersectObjects(Creatures.hitboxes(), false);
-    if (critterHits.length && (!hit || critterHits[0].distance < hit.distance + 0.4)) {
+    if (critterHits.length && (!objHit || critterHits[0].distance < objHit.dist + 0.4)) {
       Creatures.playWith(critterHits[0].object.userData.creature, Player.position);
       return;
     }
 
-    if (!hit) return;
+    // planter pieces (garden)
+    npcRaycaster.far = CONFIG.MOVE.reach;
+    var pieceMeshes = Build.pieces.map(function (p) { return p.mesh; });
+    var pieceHits = npcRaycaster.intersectObjects(pieceMeshes, false);
+    if (pieceHits.length && (!objHit || pieceHits[0].distance < objHit.dist)) {
+      var piece = pieceHits[0].object.userData.piece;
+      if (piece.t === "planter") { Garden.tap(piece); return; }
+      if (piece.t === "tent") { UI.toast("⛺ Your cozy camp. Sweet dreams guaranteed."); return; }
+    }
 
-    var held = selectedItem || UI.selectedItem();
-    var lookB = World.getBlock(hit.block.x, hit.block.y, hit.block.z);
+    if (!objHit) return;
+    var o = objHit.obj;
+    var def = o.def;
 
-    // empty bucket scoops water
-    if (held === "bucket" && lookB === B.WATER) {
-      var invb = Store.data.player.inventory;
-      if ((invb.bucket || 0) < 1) return;
-      invb.bucket -= 1;
-      invb["water bucket"] = (invb["water bucket"] || 0) + 1;
-      World.setBlock(hit.block.x, hit.block.y, hit.block.z, B.AIR);
-      Store.save();
-      GameAudio.sfx.place();
-      UI.toast("🪣 Scooped water! Tap somewhere to pour a pool.");
-      UI.updateHotbar();
-      selectedItem = "water bucket";
-      Game.selectedItem = "water bucket";
+    if (def.special) { handleSpecial(o); return; }
+
+    // ---- gathering ----
+    var p = Store.data.player;
+    var res = Objects.hit(o, { toolTier: p.toolTier, tools: p.tools });
+    if (res.blocked === "tier") {
+      GameAudio.sfx.wrong();
+      UI.toast("🔨 You need a better mallet for " + def.name.toLowerCase() + "!");
       return;
     }
-    if (held === "water bucket") { tryPlace(hit); return; }
-
-    var def = lookB && BLOCKS[lookB];
-
-    // special blocks always tap-to-use (even in build mode)
-    if (def && def.special === "bench") { UI.showWorkshop(); return; }
-    if (def && def.special === "door") {
-      World.setBlock(hit.block.x, hit.block.y, hit.block.z, lookB === B.DOOR_OPEN ? B.DOOR : B.DOOR_OPEN);
-      GameAudio.sfx.place();
-      return;
-    }
-    if (def && def.special === "bedroll") {
-      Store.data.player.camp = { isle: Store.data.player.isle, x: hit.block.x, z: hit.block.z };
-      Store.save();
-      GameAudio.sfx.quest();
-      UI.toast("😴 Camp set! If you fall off the isle, you'll wake up here.", 3200);
-      GameAudio.say("Camp set!");
-      return;
-    }
-    if (def && def.special === "garden") { Garden.tryPlant(hit.block.x, hit.block.y, hit.block.z); return; }
-    if (def && def.special === "crop") { Garden.tryHarvest(hit.block.x, hit.block.y, hit.block.z); return; }
-
-    if (def && def.special === "berries") {
-      // pick berries: instant, replant timer swaps the bush back later
-      World.setBlock(hit.block.x, hit.block.y, hit.block.z, B.BERRY_EMPTY);
-      var n = 2 + Math.floor(Math.random() * 2);
-      grantItem("berries", n);
-      if (Math.random() < 0.25) {
-        var seed = Math.random() < 0.6 ? "sunfruit seeds" : "moonmelon seeds";
-        grantItem(seed, 1);
-        UI.toast("🫐 +" + n + " berries — and " + seed + "! 🌱", 2600);
-      } else {
-        UI.toast("🫐 +" + n + " berries!");
+    GameAudio.sfx.gather();
+    burst(o.x, o.y + def.rayY, o.z, def.drops0 ? 0xffd75e : 0x9adb7a, 8);
+    if (res.done) {
+      Stats.recordGather();
+      grantXP(CONFIG.REWARDS.gatherXP);
+      var parts = [];
+      Object.keys(res.drops).forEach(function (k) {
+        grantItem(k, res.drops[k]);
+        parts.push("+" + res.drops[k] + " " + (ITEM_ICON[k] || "") + " " + k);
+      });
+      UI.gainPopup(parts.join("   "));
+      if (res.drops.aurorium) { grantSparks(2); grantXP(5); UI.toast("🌈 AURORIUM! Super rare!"); }
+      else if (res.drops.moonpearl) { grantSparks(1); UI.toast("🌙 Moonpearl! +1 spark"); }
+      if (res.drops["skysteel ore"] && !p.tools.kiln && (p.inventory["skysteel ore"] || 0) <= 2) {
+        UI.toast("🔩 Raw skysteel ore! Wren the Tinker can teach you to SMELT this...", 3200);
       }
-      grantXP(2);
-      GameAudio.sfx.pop();
-      berryRegrow.push({ isle: World.def.id, x: hit.block.x, y: hit.block.y, z: hit.block.z, at: Date.now() });
-      return;
+      if (Math.random() < 0.02) {
+        var who = Math.random() < 0.5 ? "Finch" : "Poppy";
+        UI.toast((who === "Finch" ? "👦 " : "👧 ") + who + ": Nice gathering, " + Store.profile.name + "!");
+      }
     }
+  }
 
-    if (mode === "build") { tryPlace(hit); return; }
-    if (lookB === B.AIR || !def) return;
-
-    if (def.special === "wonderstone") {
+  function handleSpecial(o) {
+    var p = Store.data.player;
+    if (o.type === "wonderstone") {
       UI.showChallenge("node", function (result) {
         if (result.correct && !result.skipped) {
-          World.setBlock(hit.block.x, hit.block.y, hit.block.z, B.AIR);
+          burst(o.x, o.y + 1, o.z, 0x54c2b9, 16);
+          Objects.remove(o);
           grantSparks(CONFIG.REWARDS.wonderstoneSparks);
           grantXP(CONFIG.REWARDS.wonderstoneXP);
           GameAudio.sfx.gather();
-          var bonus = ["stone", "timber", "earth"][Math.floor(Math.random() * 3)];
+          var bonus = ["stone", "timber", "berries"][Math.floor(Math.random() * 3)];
           grantItem(bonus, 2);
           UI.toast("✨ +" + CONFIG.REWARDS.wonderstoneSparks + " sparks!  🎒 +2 " + bonus);
         }
       }, "🔮 Wonderstone!");
       return;
     }
-
-    if (def.special === "chest") {
+    if (o.type === "chest") {
       UI.showChallenge("chest", function (result) {
         if (result.correct && !result.skipped) {
-          World.setBlock(hit.block.x, hit.block.y, hit.block.z, B.AIR);
+          burst(o.x, o.y + 0.6, o.z, 0xf2ca55, 16);
+          Objects.remove(o);
           grantSparks(CONFIG.REWARDS.chestSparks);
           grantXP(CONFIG.REWARDS.chestXP);
-          var rolls = [["planks", 4], ["claybrick", 4], ["glowmoss", 2], ["timber", 3],
-                       ["sunfruit seeds", 2], ["moonmelon seeds", 2]];
+          var rolls = [["timber", 4], ["claybrick", 4], ["glowmoss", 2], ["glass", 2],
+                       ["sunfruit seeds", 2], ["moonmelon seeds", 2], ["fluff", 3]];
           var loot = rolls[Math.floor(Math.random() * rolls.length)];
           grantItem(loot[0], loot[1]);
           UI.toast("🧰 Treasure! +" + CONFIG.REWARDS.chestSparks + " sparks and " + loot[1] + " " + loot[0] + "!");
@@ -257,169 +248,304 @@ var Game = (function () {
       }, "🧰 Curio Chest!");
       return;
     }
-
-    // regular gathering
-    if (def.hard < 0) { UI.toast("That block is too strong... maybe forever!"); return; }
-    var p = Store.data.player;
-    if (def.needLegend && !p.tools[def.needLegend]) {
-      GameAudio.sfx.wrong();
-      UI.toast("🌀 Only a legendary tool can break " + def.name + "! Elder Alder's SUPER CHALLENGES might earn you one...", 3500);
-      return;
-    }
-    if (def.needTool > p.toolTier) {
-      GameAudio.sfx.wrong();
-      UI.toast("🔨 You need a better mallet for " + def.name + "!");
-      return;
-    }
-    var speed = TOOL_SPEED[p.toolTier] * (p.tools.sunhammer ? 2 : 1);
-    var bid = def.id;
-    if (p.tools.spade && (bid === B.EARTH || bid === B.MEADOW || bid === B.CLOUDSAND ||
-        bid === B.SNOW || bid === B.STARMOSS)) speed *= 2.4;
-    else if (p.tools.hatchet && (bid === B.TIMBER || bid === B.LEAF || bid === B.LEAF_ROSE ||
-        bid === B.PLANKS || bid === B.FENCE || bid === B.DOOR || bid === B.DOOR_OPEN ||
-        bid === B.SPINELEAF || bid === B.DOCKWOOD)) speed *= 2.4;
-    var ms = Math.max(120, def.hard / speed);
-    gathering = {
-      x: hit.block.x, y: hit.block.y, z: hit.block.z,
-      until: performance.now() + ms, total: ms, def: def
-    };
-    GameAudio.sfx.gather();
-  }
-
-  function finishGathering() {
-    var m = gathering;
-    gathering = null;
-    document.getElementById("gather-progress").style.display = "none";
-    var current = World.getBlock(m.x, m.y, m.z);
-    if (current === B.AIR) return;
-    World.setBlock(m.x, m.y, m.z, B.AIR);
-    GameAudio.sfx.gather();
-    Stats.recordGather();
-    if (m.def.drop) {
-      grantItem(m.def.drop, 1);
-      grantXP(CONFIG.REWARDS.gatherXP);
-      if (m.def.drop === "moonpearl") { grantSparks(1); UI.toast("🌙 Moonpearl! +1 spark"); }
-      if (m.def.drop === "aurorium") { grantSparks(2); grantXP(5); UI.toast("🌈 AURORIUM! Super rare! +2 sparks"); }
-      if (m.def.drop === "skysteel ore" && !Store.data.player.tools.kiln &&
-          (Store.data.player.inventory["skysteel ore"] || 0) <= 2) {
-        UI.toast("🔩 Raw skysteel ore! Wren the Tinker can teach you to SMELT this in a kiln...", 3200);
+    if (o.type === "spring") { springFlow(o); return; }
+    if (o.type === "grottodoor") {
+      if (!p.tools.drill) {
+        GameAudio.sfx.wrong();
+        UI.toast("🌀 Sealed tight. Elder Alder's ROOTBREAKER DRILL could open this...", 3400);
+        return;
       }
-    }
-    if (m.def.id === B.LANTERN) removeLanternLight(m.x, m.y, m.z);
-    if (m.def.id === B.ROOTSTONE) {
-      UI.toast("🌀 You broke through the rootstone! THE HOLLOW glimmers below...", 3500);
-    }
-    // occasionally the quest friends cheer
-    if (Math.random() < 0.02) {
-      var who = Math.random() < 0.5 ? "Finch" : "Poppy";
-      UI.toast((who === "Finch" ? "👦 " : "👧 ") + who + ": Nice gathering, " + Store.profile.name + "!");
-    }
-  }
-
-  function tryPlace(hit) {
-    var item = selectedItem || UI.selectedItem();
-    if (!item) { UI.toast("Pick a block from your pack first!"); setMode("gather"); return; }
-    var inv = Store.data.player.inventory;
-    if (!inv[item] || inv[item] <= 0) { UI.toast("No more " + item + "! Gather some more."); UI.updateHotbar(); return; }
-    var t = hit.place;
-    if (t.y <= World.MIN_Y || t.y >= World.SY) return;
-    if (World.getBlock(t.x, t.y, t.z) !== B.AIR) return;
-    if (Player.wouldIntersectPlayer(t.x, t.y, t.z)) return;
-    var blockId = ITEM_TO_BLOCK[item];
-    if (blockId === undefined) return;
-    if (blockId === B.LANTERN && !Store.data.player.tools.lanternkit) {
-      UI.toast("🏮 Wren's lantern kit teaches you to hang lanterns that GLOW!");
+      fadeTo(function () {
+        Terrain.enterGrotto();
+        Objects.setGrottoVisibility(true);
+        var gr = Terrain.grotto;
+        Player.spawnAt(gr.x, gr.z + gr.r - 5, Math.PI);
+        scene.background = new THREE.Color(0x0a0814);
+        scene.fog = new THREE.Fog(0x0a0814, 6, 42);
+        addGrottoLights();
+        UI.toast("🌀 The Hollow Grotto... crystals hum in the dark.", 3000);
+      });
       return;
     }
-    World.setBlock(t.x, t.y, t.z, blockId);
-    inv[item] -= 1;
-    if (item === "water bucket") {
-      inv.bucket = (inv.bucket || 0) + 1;
-      selectedItem = (inv.bucket > 0) ? "bucket" : null;
-      Game.selectedItem = selectedItem;
+    if (o.type === "grottoexit") {
+      fadeTo(function () {
+        Terrain.exitGrotto();
+        Objects.setGrottoVisibility(false);
+        removeGrottoLights();
+        var spot = Terrain.grottoDoorSpot();
+        Player.spawnAt(spot.x, spot.z);
+        scene.background = new THREE.Color(Terrain.def.sky);
+        scene.fog = new THREE.Fog(Terrain.def.fog, 80, 320);
+      });
+      return;
     }
-    Store.save();
-    Stats.recordBuild();
-    GameAudio.sfx.place();
-    UI.updateHotbar();
-    if (blockId === B.LANTERN) addLanternLight(t.x, t.y, t.z);
+    if (o.type === "anchor") { anchorInfo(o); return; }
   }
 
-  /* ---------------- lantern lights ---------------- */
-  var lanternLights = {};
-  function addLanternLight(x, y, z) {
-    var key = x + "," + y + "," + z;
-    if (lanternLights[key]) return;
-    if (Object.keys(lanternLights).length >= 48) return;
-    var light = new THREE.PointLight(0xffcc66, 1.15, 9, 2);
-    light.position.set(x + 0.5, y + 0.7, z + 0.5);
-    scene.add(light);
-    lanternLights[key] = light;
+  /* ---------------- Lightspring restoration ---------------- */
+  function springCost() {
+    var lvl = Store.data.player.level;
+    return lvl >= 6 ? { timber: 8, stone: 6, glowmoss: 1 } :
+           lvl >= 3 ? { timber: 6, stone: 4 } : { timber: 4, stone: 2 };
   }
-  function removeLanternLight(x, y, z) {
-    var key = x + "," + y + "," + z;
-    if (!lanternLights[key]) return;
-    scene.remove(lanternLights[key]);
-    delete lanternLights[key];
-  }
-  function rebuildLanternLights() {
-    Object.keys(lanternLights).forEach(function (k) { scene.remove(lanternLights[k]); });
-    lanternLights = {};
-    var edits = Store.worldEdits(World.def.id);
-    Object.keys(edits).forEach(function (key) {
-      if (edits[key] !== B.LANTERN) return;
-      var p = key.split(",");
-      addLanternLight(+p[0], +p[1], +p[2]);
+
+  function springFlow(o) {
+    var zone = o.zone;
+    if (zone.restored) {
+      burst(o.x, o.y + 2, o.z, 0xbff2ff, 10);
+      GameAudio.sfx.spark();
+      UI.toast("⛲ The Lightspring hums happily. This land is healed!");
+      return;
+    }
+    var cost = springCost();
+    var afford = Build.canAfford(cost);
+    UI.openOverlay(
+      "<div class='ch-title'>⛲ A dormant Lightspring</div>" +
+      "<div class='sentence-text'>The land around it is gray and sleeping. Offer materials and answer the " +
+      "<b>Rite of Light</b> — two challenges — to wake it!</div>" +
+      "<div class='ch-sub'>Offering: " + Build.costStr(cost) + (afford ? " ✓" : " — keep gathering!") + "</div>" +
+      (afford ? "<button class='big-btn' id='sp-go'>🕯️ BEGIN THE RITE</button>" : "") +
+      "<button class='ghost-btn' id='sp-later'>Maybe later</button>"
+    );
+    GameAudio.sfx.quest();
+    document.getElementById("sp-later").addEventListener("pointerdown", UI.closeOverlay);
+    var go = document.getElementById("sp-go");
+    if (go) go.addEventListener("pointerdown", function () {
+      UI.showChallenge("super", function (r1) {
+        if (!r1.correct || r1.skipped) { UI.toast("The spring stays quiet... try again soon!"); return; }
+        UI.showChallenge("super", function (r2) {
+          if (!r2.correct || r2.skipped) { UI.toast("So close! The spring flickered. Try again soon!"); return; }
+          var inv = Store.data.player.inventory;
+          Object.keys(cost).forEach(function (k) { inv[k] -= cost[k]; });
+          restoreZone(o, zone);
+        }, "🕯️ Rite of Light (2 of 2)");
+      }, "🕯️ Rite of Light (1 of 2)");
     });
   }
 
-  /* ---------------- berry regrowth ---------------- */
-  var berryRegrow = [];
-  function tickBerries() {
-    var now = Date.now();
-    for (var i = berryRegrow.length - 1; i >= 0; i--) {
-      var b = berryRegrow[i];
-      if (now - b.at < CONFIG.WORLD.berryRegrowSec * 1000) continue;
-      berryRegrow.splice(i, 1);
-      if (b.isle !== World.def.id) continue;
-      if (World.getBlock(b.x, b.y, b.z) === B.BERRY_EMPTY) {
-        World.setBlock(b.x, b.y, b.z, B.BERRY_FULL);
+  var restoreAnim = null;
+  function restoreZone(o, zone) {
+    zone.restored = true;
+    if (!currentIsleState.springs) currentIsleState.springs = [];
+    currentIsleState.springs.push(zone.id);
+    Store.save();
+    restoreAnim = { zone: zone, t: 0 };
+    GameAudio.sfx.levelup();
+    GameAudio.say("The Lightspring awakens! The land remembers how to bloom!");
+    burst(o.x, o.y + 2, o.z, 0xbff2ff, 24);
+    grantSparks(6);
+    grantXP(40);
+    var total = Terrain.zones.length;
+    var done = Terrain.zones.filter(function (z) { return z.restored; }).length;
+    setTimeout(function () {
+      if (done >= total) {
+        UI.toast("🌟 ALL LIGHTSPRINGS RESTORED! The bridge anchors to the sky islets are glowing!", 4200);
+        GameAudio.say("You restored the whole isle! Now the sky islets await — build bridges from the glowing anchors!");
+      } else {
+        UI.toast("⛲ Lightspring restored! " + (total - done) + " more and the whole isle shines!", 3600);
       }
+      UI.updateHud();
+    }, 2600);
+  }
+
+  function tickRestore(dt) {
+    if (!restoreAnim) return;
+    restoreAnim.t += dt;
+    var zone = restoreAnim.zone;
+    zone.progress = Math.min(1, restoreAnim.t / 2.5);
+    if (restoreAnim.recolorAccum === undefined) restoreAnim.recolorAccum = 0;
+    restoreAnim.recolorAccum += dt;
+    if (restoreAnim.recolorAccum > 0.12) {
+      restoreAnim.recolorAccum = 0;
+      Terrain.recolorGround();
+    }
+    if (zone.progress >= 1) {
+      Terrain.recolorGround();
+      Objects.reviveZone(zone);
+      restoreAnim = null;
     }
   }
 
-  /* ---------------- STARFALL (the beloved storm mechanic) ---------------- */
-  // Go quiet on learning for a while and a wishing star tumbles from the
-  // sky — answer its riddle to catch the sparks before it fades!
+  /* ---------------- bridges & islets ---------------- */
+  function anchorPair(idx) {
+    var a = Objects.byId("anchorA" + idx), b = Objects.byId("anchorB" + idx);
+    return a && b ? { a: a, b: b } : null;
+  }
+
+  function springsAllRestored() {
+    return Terrain.zones.length > 0 && Terrain.zones.every(function (z) { return z.restored; });
+  }
+
+  function anchorInfo(o) {
+    var idx = o.id.indexOf("anchorA") === 0 ? o.id.slice(7) : o.id.slice(7);
+    var pair = anchorPair(idx);
+    if (!springsAllRestored() && Terrain.zones.length) {
+      UI.toast("🪢 This anchor sleeps until every Lightspring on the isle is restored...", 3400);
+      return;
+    }
+    if (currentIsleState.bridges && currentIsleState.bridges[idx]) {
+      UI.toast("🌉 Your bridge sings in the wind. The islet is yours!");
+      return;
+    }
+    UI.toast("🪢 Build BRIDGE pieces (🛠️ build mode) from here toward the far islet!", 3600);
+    GameAudio.sfx.quest();
+  }
+
+  function checkBridges() {
+    if (!currentIsleState.bridges) currentIsleState.bridges = {};
+    Terrain.islets.forEach(function (it, idx) {
+      if (currentIsleState.bridges[idx]) return;
+      var pair = anchorPair(idx);
+      if (!pair) return;
+      var dist = Math.hypot(pair.b.x - pair.a.x, pair.b.z - pair.a.z);
+      var needed = Math.max(2, Math.ceil((dist - 6) / 4));
+      var have = Build.bridgePiecesNear(pair.a.x, pair.a.z, pair.b.x, pair.b.z);
+      if (have >= needed) {
+        currentIsleState.bridges[idx] = true;
+        Store.save();
+        grantSparks(8);
+        grantXP(60);
+        GameAudio.sfx.levelup();
+        GameAudio.say("You connected a sky islet! What an explorer!");
+        UI.toast("🌉 SKY ISLET CONNECTED! +8 sparks — explore your new land!", 4200);
+      }
+    });
+  }
+
+  /* ---------------- grotto crystal glow ---------------- */
+  var grottoLights = [];
+  function addGrottoLights() {
+    removeGrottoLights();
+    var colors = { moonpearl: 0xd9c2f2, aurorium: 0x7af2d0, wonderstone: 0x54c2b9 };
+    ["gc0", "gc1", "gc2", "gc3", "gc4", "gw0", "gw1", "gw2"].forEach(function (id) {
+      if (grottoLights.length >= 5) return;
+      var o = Objects.byId(id);
+      if (!o || o.gone) return;
+      var light = new THREE.PointLight(colors[o.type] || 0xb0a2e8, 1.6, 12, 1.8);
+      light.position.set(o.x, o.y + 1.6, o.z);
+      scene.add(light);
+      grottoLights.push(light);
+    });
+  }
+  function removeGrottoLights() {
+    grottoLights.forEach(function (l) { scene.remove(l); });
+    grottoLights = [];
+  }
+
+  /* ---------------- fade transition ---------------- */
+  function fadeTo(fn) {
+    var el = document.getElementById("fade");
+    el.style.opacity = 1;
+    setTimeout(function () {
+      fn();
+      setTimeout(function () { el.style.opacity = 0; }, 250);
+    }, 320);
+  }
+
+  /* ---------------- particles ---------------- */
+  var particles = null, pData = [];
+  function initParticles() {
+    var N = 90;
+    var geo = new THREE.BufferGeometry();
+    var pos = new Float32Array(N * 3);
+    var col = new Float32Array(N * 3);
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    var mat = new THREE.PointsMaterial({ size: 0.34, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false });
+    particles = new THREE.Points(geo, mat);
+    particles.frustumCulled = false;
+    scene.add(particles);
+    for (var i = 0; i < N; i++) pData.push({ life: 0, vx: 0, vy: 0, vz: 0 });
+  }
+
+  function burst(x, y, z, colorHex, n) {
+    var col = new THREE.Color(colorHex);
+    var pos = particles.geometry.attributes.position;
+    var colors = particles.geometry.attributes.color;
+    var spawned = 0;
+    for (var i = 0; i < pData.length && spawned < n; i++) {
+      var pd = pData[i];
+      if (pd.life > 0) continue;
+      pd.life = 0.7 + Math.random() * 0.5;
+      pd.vx = (Math.random() - 0.5) * 3.2;
+      pd.vy = 2 + Math.random() * 2.6;
+      pd.vz = (Math.random() - 0.5) * 3.2;
+      pos.setXYZ(i, x + (Math.random() - 0.5) * 0.6, y, z + (Math.random() - 0.5) * 0.6);
+      colors.setXYZ(i, col.r, col.g, col.b);
+      spawned++;
+    }
+    pos.needsUpdate = true;
+    colors.needsUpdate = true;
+  }
+
+  function tickParticles(dt) {
+    var pos = particles.geometry.attributes.position;
+    var any = false;
+    for (var i = 0; i < pData.length; i++) {
+      var pd = pData[i];
+      if (pd.life <= 0) continue;
+      any = true;
+      pd.life -= dt;
+      pd.vy -= 7 * dt;
+      pos.setXYZ(i,
+        pos.getX(i) + pd.vx * dt,
+        pd.life <= 0 ? -999 : pos.getY(i) + pd.vy * dt,
+        pos.getZ(i) + pd.vz * dt);
+    }
+    if (any) pos.needsUpdate = true;
+  }
+
+  /* ---------------- STARFALL ---------------- */
   var lastEdu = Date.now();
   function notifyEdu() { lastEdu = Date.now(); }
 
+  var fallingStar = null;
   function maybeStarfall() {
-    if (!running) return;
+    if (!running || fallingStar) return;
     if (document.getElementById("overlay").classList.contains("open")) return;
     if (Date.now() - lastEdu < CONFIG.LEARN.starfallMinutes * 60 * 1000) return;
-    lastEdu = Date.now();   // set immediately so it can't double-fire
+    lastEdu = Date.now();
+    // a glowing star tumbles from the sky ahead of the player
+    var g = new Geo.Builder();
+    g.blob(0.7, 0xfff3c4, {}, 0.1, 0.2);
+    g.cone(0.25, 1.4, 4, 0xffd75e, { y: 0.5, rx: Math.PI }, 0, 0);
+    var star = g.build(new THREE.MeshBasicMaterial({ vertexColors: true }));
+    var p = Player.position, yaw = Player.yaw;
+    star.position.set(p.x - Math.sin(yaw) * 10, p.y + 26, p.z - Math.cos(yaw) * 10);
+    scene.add(star);
+    fallingStar = { mesh: star, t: 0 };
     GameAudio.sfx.starfall();
     GameAudio.say("A star is falling! Catch it quick!");
-    UI.showChallenge("starfall", function (result) {
-      if (result.correct && !result.skipped) {
-        grantSparks(CONFIG.REWARDS.starfallSparks);
-        grantXP(CONFIG.REWARDS.starfallXP);
-        UI.toast("🌠 You caught the wishing star! +" + CONFIG.REWARDS.starfallSparks + " sparks!", 3000);
-      }
-    }, "🌠 STARFALL! Catch the wishing star!");
+  }
+
+  function tickStarfall(dt) {
+    if (!fallingStar) return;
+    fallingStar.t += dt;
+    fallingStar.mesh.position.y -= dt * 14;
+    fallingStar.mesh.rotation.y += dt * 6;
+    burst(fallingStar.mesh.position.x, fallingStar.mesh.position.y, fallingStar.mesh.position.z, 0xffe08a, 1);
+    if (fallingStar.t > 1.5) {
+      scene.remove(fallingStar.mesh);
+      fallingStar = null;
+      UI.showChallenge("starfall", function (result) {
+        if (result.correct && !result.skipped) {
+          grantSparks(CONFIG.REWARDS.starfallSparks);
+          grantXP(CONFIG.REWARDS.starfallXP);
+          UI.toast("🌠 You caught the wishing star! +" + CONFIG.REWARDS.starfallSparks + " sparks!", 3000);
+        }
+      }, "🌠 STARFALL! Catch the wishing star!");
+    }
   }
 
   /* ---------------- Pip's heists ---------------- */
   var lastSteal = 0;
-  var STEALABLE = ["earth", "leaves", "cloudsand", "sunpetal", "bellbloom", "stone", "planks", "timber"];
+  var STEALABLE = ["leaves", "sunpetal", "bellbloom", "stone", "timber", "berries"];
 
   function pipSteal() {
     if (!running) return;
     var now = Date.now();
     if (now - lastSteal < CONFIG.PIP.stealCooldownMs) return;
     lastSteal = now;
-
     setTimeout(function () {
       var inv = Store.data.player.inventory;
       var item = null;
@@ -430,8 +556,8 @@ var Game = (function () {
       var n = NPCs.positionFoxNear(p.x - Math.sin(yaw) * 2.5, p.z - Math.cos(yaw) * 2.5);
       if (n) {
         n.target = {
-          x: Math.max(3, Math.min(125, p.x + (Math.random() * 40 - 20))),
-          z: Math.max(3, Math.min(125, p.z + (Math.random() * 40 - 20)))
+          x: Math.max(3, Math.min(Terrain.SX - 3, p.x + (Math.random() * 40 - 20))),
+          z: Math.max(3, Math.min(Terrain.SZ - 3, p.z + (Math.random() * 40 - 20)))
         };
         n.moveT = 12;
         n.speed = 4.5;
@@ -441,7 +567,6 @@ var Game = (function () {
       if (item) {
         inv[item] -= 1;
         Store.save();
-        UI.updateHotbar();
         UI.updateQuestHud();
         UI.toast("🦊 PIP!! He snatched 1 " + item + " and zoomed away! Sneaky fox!", 3800);
       } else {
@@ -450,38 +575,96 @@ var Game = (function () {
     }, 1600);
   }
 
-  function setMode(m) {
-    mode = m;
-    Game.mode = m;
+  /* ---------------- build mode toggle ---------------- */
+  function toggleMode() {
+    if (Build.mode) {
+      Build.exitMode();
+      UI.hideBuildSheet();
+      UI.toast("🔍 Explore mode", 1200);
+    } else {
+      Build.enterMode();
+      UI.showBuildSheet();
+      UI.toast("🛠️ Build mode — pick a piece, aim, tap to place!", 2200);
+    }
     UI.updateModeButton();
-    UI.toast(m === "build" ? "🧱 Build mode — tap to place blocks!" : "🔨 Gather mode — tap blocks to collect!", 1500);
   }
-  function toggleMode() { setMode(mode === "gather" ? "build" : "gather"); }
 
-  /* ---------------- day/night ---------------- */
+  /* ---------------- prompt (contextual interaction hint) ---------------- */
+  var promptTimer = 0;
+  function updatePrompt(dt) {
+    promptTimer += dt;
+    if (promptTimer < 0.12) return;
+    promptTimer = 0;
+    if (Build.mode) {
+      var gp = Build.ghostPose;
+      if (Build.removeMode) UI.setPrompt("🧹", "Tap a piece to take it back", null);
+      else if (gp && !gp.valid && gp.reason) UI.setPrompt("🛠️", gp.reason, null);
+      else UI.setPrompt("🛠️", "Tap to place " + Build.pieceDef(Build.activePiece).name.toLowerCase(), null);
+      return;
+    }
+    npcRaycaster.setFromCamera({ x: 0, y: 0 }, camera);
+    npcRaycaster.far = 5;
+    var npcHits = npcRaycaster.intersectObjects(NPCs.hitboxes(), false);
+    if (npcHits.length) {
+      var n = npcHits[0].object.userData.npc;
+      UI.setPrompt(n.def.fox ? "🦊" : "💬", n.def.name + " · tap to " + (n.def.fox ? "pet" : "talk"), null);
+      return;
+    }
+    var critterHits = npcRaycaster.intersectObjects(Creatures.hitboxes(), false);
+    if (critterHits.length) {
+      var a = critterHits[0].object.userData.creature;
+      UI.setPrompt(a.def.emoji, a.type + " · tap to play!", null);
+      return;
+    }
+    var objHit = Objects.raycast(npcRaycaster.ray.origin, npcRaycaster.ray.direction, CONFIG.MOVE.reach);
+    if (objHit) {
+      var o = objHit.obj;
+      if (o.def.special) {
+        var labels = {
+          wonderstone: "tap to answer!", chest: "tap to open!", spring: o.zone && o.zone.restored ? "healed & humming" : "tap to restore!",
+          grottodoor: Store.data.player.tools.drill ? "tap to enter!" : "sealed — needs the drill",
+          grottoexit: "tap to climb out", anchor: "tap to check"
+        };
+        UI.setPrompt(o.def.icon, o.def.name + " · " + (labels[o.type] || "tap!"), null);
+      } else {
+        var frac = o.hp / o.def.taps;
+        UI.setPrompt(o.def.icon, o.def.name + " · tap to " + o.def.verb + "!", frac);
+      }
+      return;
+    }
+    var pieceMeshes = Build.pieces.filter(function (p) { return p.t === "planter"; }).map(function (p) { return p.mesh; });
+    if (pieceMeshes.length) {
+      npcRaycaster.far = CONFIG.MOVE.reach;
+      var ph = npcRaycaster.intersectObjects(pieceMeshes, false);
+      if (ph.length) {
+        UI.setPrompt("🌱", Garden.promptFor(ph[0].object.userData.piece), null);
+        return;
+      }
+    }
+    UI.setPrompt(null);
+  }
+
+  /* ---------------- day / night ---------------- */
   var skyDay = new THREE.Color(), skyCur = new THREE.Color();
   function updateDayNight() {
-    // 10-minute gentle cycle; never fully dark
     var t = (Date.now() % 600000) / 600000;
     var daylight = 0.62 + 0.38 * Math.max(0.25, Math.sin(t * Math.PI * 2) * 0.5 + 0.5);
-    sun.intensity = 0.9 * daylight;
-    ambient.intensity = 0.35 + 0.25 * daylight;
-    hemi.intensity = 0.35;
+    sun.intensity = 0.85 * daylight;
+    ambient.intensity = 0.4 + 0.25 * daylight;
+    hemi.intensity = 0.45;
     var ang = t * Math.PI * 2;
     sun.position.set(Math.cos(ang) * 80, Math.abs(Math.sin(ang)) * 90 + 25, 40);
-    skyDay.setHex(World.def.sky);
-    skyCur.copy(skyDay).multiplyScalar(0.45 + 0.55 * daylight);
-    if (scene.background) scene.background.copy(skyCur);
-    // The Hollow (and deep holes) glow dim — lanterns shine here
-    if (Player.position.y < 1) {
-      ambient.intensity = 0.10;
-      hemi.intensity = 0.06;
-      sun.intensity = 0.04;
-      if (scene.background) scene.background.setHex(0x0a0814);
+    if (Terrain.inGrotto) {
+      ambient.intensity = 0.22;
+      hemi.intensity = 0.1;
+      sun.intensity = 0.03;
       keeperGlow.intensity = 2.2;
-      keeperGlow.position.set(Player.position.x, Player.position.y + 1.6, Player.position.z);
+      keeperGlow.position.set(Player.position.x, Player.position.y + 1.7, Player.position.z);
     } else {
       keeperGlow.intensity = 0;
+      skyDay.setHex(Terrain.def.sky);
+      skyCur.copy(skyDay).multiplyScalar(0.45 + 0.55 * daylight);
+      if (scene.background) scene.background.copy(skyCur);
     }
   }
 
@@ -497,42 +680,22 @@ var Game = (function () {
     Player.update(dt);
     NPCs.update(dt, Player.position);
     Creatures.update(dt, Player.position);
+    Objects.tick(dt, now / 1000);
+    Build.updateGhost();
     updateDayNight();
     maybeStarfall();
+    tickStarfall(dt);
+    tickRestore(dt);
+    tickParticles(dt);
+    updatePrompt(dt);
 
-    cloudsAbove.forEach(function (c) {
-      c.position.x += dt * 0.6;
-      if (c.position.x > 140) c.position.x = -12;
+    clouds.forEach(function (c) {
+      c.position.x += dt * c.userData.speed;
+      if (c.position.x > 240) c.position.x = -40;
     });
-    cloudsBelow.forEach(function (c) {
-      c.position.x += dt * 1.1;
-      if (c.position.x > 160) c.position.x = -32;
-    });
-
-    // block highlight + gather progress
-    var hit = Player.raycastBlock(CONFIG.MOVE.reach);
-    if (hit && !gathering) {
-      highlightBox.visible = true;
-      highlightBox.position.set(hit.block.x + 0.5, hit.block.y + 0.5, hit.block.z + 0.5);
-    } else if (!gathering) {
-      highlightBox.visible = false;
-    }
-
-    if (gathering) {
-      var left = gathering.until - now;
-      var bar = document.getElementById("gather-progress");
-      bar.style.display = "block";
-      document.getElementById("gather-progress-fill").style.width =
-        (100 - (left / gathering.total) * 100) + "%";
-      highlightBox.visible = true;
-      highlightBox.position.set(gathering.x + 0.5, gathering.y + 0.5, gathering.z + 0.5);
-      var s = 1 + Math.sin(now / 40) * 0.02;
-      highlightBox.scale.set(s, s, s);
-      if (left <= 0) { highlightBox.scale.set(1, 1, 1); finishGathering(); }
-    }
 
     gardenTimer += dt;
-    if (gardenTimer > 4) { gardenTimer = 0; Garden.tick(); tickBerries(); }
+    if (gardenTimer > 4) { gardenTimer = 0; Garden.tick(); }
 
     statTimer += dt;
     if (statTimer > 5) { statTimer = 0; Stats.tickPlaytime(); Store.save(); }
@@ -540,21 +703,12 @@ var Game = (function () {
     renderer.render(scene, camera);
   }
 
-  function stop() {
-    running = false;
-    Game.running = false;
-    Controls.setEnabled(false);
-    Stats.tickPlaytime();
-    Store.saveNow();
-  }
-
   return {
     init: init, start: start, stop: stop, interact: interact, travelTo: travelTo,
     grantXP: grantXP, grantSparks: grantSparks, grantItem: grantItem,
-    toggleMode: toggleMode, setMode: setMode, pipSteal: pipSteal,
-    notifyEdu: notifyEdu,
-    get mode() { return mode; }, set mode(v) { mode = v; },
-    get selectedItem() { return selectedItem; }, set selectedItem(v) { selectedItem = v; },
+    toggleMode: toggleMode, pipSteal: pipSteal, notifyEdu: notifyEdu,
+    checkBridges: checkBridges, springsAllRestored: springsAllRestored,
+    burst: burst,
     running: false
   };
 })();

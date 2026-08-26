@@ -117,8 +117,10 @@ var Controls = (function () {
       if (!down && e.code === "Space") Player.jump = false;
       if (down && e.code === "KeyB") Game.toggleMode();
       if (down && e.code === "KeyE") UI.toggleInventory();
-      if (down && e.code >= "Digit1" && e.code <= "Digit9") {
-        UI.selectHotbar(parseInt(e.code.slice(5), 10) - 1);
+      if (down && e.code === "KeyR" && Build.mode) Build.rotate();
+      if (down && e.code >= "Digit1" && e.code <= "Digit9" && Build.mode) {
+        var pi = parseInt(e.code.slice(5), 10) - 1;
+        if (Build.PIECES[pi]) { Build.setPiece(Build.PIECES[pi].id); UI.updateBuildSheet(); }
       }
       updateKeyMove();
     };

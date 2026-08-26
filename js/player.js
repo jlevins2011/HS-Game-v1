@@ -1,28 +1,31 @@
 "use strict";
 /* ============================================================
-   PLAYER — first-person camera, walking physics, voxel
-   collision, swimming, ladder climbing, and the gather/place
-   raycast. Values proven with real kids in v1.
+   PLAYER — first-person camera and movement over sculpted
+   terrain. The speeds, jump arc, and responsiveness are the
+   proven v1 values; only the ground itself changed: smooth
+   heightfield walking, cliff faces act as walls, structure
+   floors are walkable, trees and rocks push back gently.
    ============================================================ */
 var Player = (function () {
   var camera = null;
-  var pos = new THREE.Vector3(64, 30, 64);   // feet position
+  var pos = new THREE.Vector3(96, 30, 96);   // feet position
   var vel = new THREE.Vector3();
   var yaw = 0, pitch = 0;
   var onGround = false;
-  var WIDTH = 0.55, HEIGHT = 1.65, EYE = 1.5;
+  var RADIUS = 0.34, HEIGHT = 1.65, EYE = 1.5;
+  var STEP = 0.75;                 // max walk-up ledge; steeper = wall
 
-  var move = { x: 0, z: 0 };   // -1..1 strafe / forward (set by Controls)
+  var move = { x: 0, z: 0 };
   var wantJump = false;
 
   function init(cam) { camera = cam; }
 
   function spawnAt(x, z, facingYaw) {
-    var g = World.groundNear(x, z);
-    pos.set(g.x + 0.5, g.y + 1.05, g.z + 0.5);
+    var g = Terrain.groundNear(x, z);
+    pos.set(g.x, g.y + 0.1, g.z);
     vel.set(0, 0, 0);
     yaw = facingYaw !== undefined ? facingYaw : Math.PI * 0.25;
-    pitch = -0.1;
+    pitch = -0.08;
   }
 
   function look(dx, dy) {
@@ -32,45 +35,33 @@ var Player = (function () {
     pitch = Math.max(-lim, Math.min(lim, pitch));
   }
 
-  function collide(axis, amount) {
-    pos[axis] += amount;
-    var minX = pos.x - WIDTH / 2, maxX = pos.x + WIDTH / 2;
-    var minY = pos.y,             maxY = pos.y + HEIGHT;
-    var minZ = pos.z - WIDTH / 2, maxZ = pos.z + WIDTH / 2;
-    for (var bx = Math.floor(minX); bx <= Math.floor(maxX); bx++)
-      for (var by = Math.floor(minY); by <= Math.floor(maxY); by++)
-        for (var bz = Math.floor(minZ); bz <= Math.floor(maxZ); bz++) {
-          if (!World.isSolid(bx, by, bz)) continue;
-          if (axis === "y") {
-            if (amount < 0) { pos.y = by + 1; vel.y = 0; onGround = true; }
-            else { pos.y = by - HEIGHT - 0.001; vel.y = 0; }
-          } else if (axis === "x") {
-            pos.x = amount > 0 ? bx - WIDTH / 2 - 0.001 : bx + 1 + WIDTH / 2 + 0.001;
-          } else {
-            pos.z = amount > 0 ? bz - WIDTH / 2 - 0.001 : bz + 1 + WIDTH / 2 + 0.001;
-          }
-          return;
-        }
+  // walkable ground at (x,z) considering terrain and structure floors
+  function groundAt(x, z, refY) {
+    var g = Terrain.heightAt(x, z);
+    var b = (window.Build ? Build.floorTopAt(x, z, refY + STEP) : -Infinity);
+    return Math.max(g, b);
+  }
+
+  function tryAxis(nx, nz) {
+    var g = groundAt(nx, nz, pos.y);
+    if (g === -Infinity) return true;                   // open sky: allowed, we'll fall
+    if (g - pos.y > STEP) return false;                 // cliff face / wall
+    return true;
   }
 
   var stepAccum = 0;
   function update(dt) {
     dt = Math.min(dt, 0.05);
     var M = CONFIG.MOVE;
-    var inWater = World.isWaterAt(pos.x, pos.y + 0.5, pos.z);
-    var onLadder = World.isLadderAt(pos.x, pos.y + 0.4, pos.z) ||
-                   World.isLadderAt(pos.x, pos.y + 1.1, pos.z);
+    var water = Terrain.def.water;
+    var inWater = !Terrain.inGrotto && water > 0 && Terrain.isWater(pos.x, pos.z) && pos.y < water - 0.15;
 
     var sin = Math.sin(yaw), cos = Math.cos(yaw);
-    var speed = (inWater || onLadder) ? M.speed * M.waterSpeedMul : M.speed;
+    var speed = inWater ? M.speed * M.waterSpeedMul : M.speed;
     var vx = (move.x * cos - move.z * sin) * speed;
     var vz = (-move.x * sin - move.z * cos) * speed;
 
-    if (onLadder) {
-      if (wantJump) vel.y = 4.6;
-      else if (move.z !== 0 || move.x !== 0) vel.y = 3.1;
-      else vel.y = -1.4;
-    } else if (inWater) {
+    if (inWater) {
       vel.y -= M.gravity * 0.25 * dt;
       vel.y = Math.max(vel.y, -2.5);
       if (wantJump) vel.y = 3.2;
@@ -79,25 +70,57 @@ var Player = (function () {
       if (wantJump && onGround) { vel.y = M.jump; onGround = false; GameAudio.sfx.pop(); }
     }
 
-    onGround = false;
-    collide("y", vel.y * dt);
-    collide("x", vx * dt);
-    collide("z", vz * dt);
+    // horizontal, axis-separated so we slide along walls
+    var dx = vx * dt, dz = vz * dt;
+    if (dx || dz) {
+      if (tryAxis(pos.x + dx, pos.z + dz)) { pos.x += dx; pos.z += dz; }
+      else if (tryAxis(pos.x + dx, pos.z)) { pos.x += dx; }
+      else if (tryAxis(pos.x, pos.z + dz)) { pos.z += dz; }
+    }
 
-    // soft walls at the very map border
-    pos.x = Math.max(1, Math.min(World.SX - 1, pos.x));
-    pos.z = Math.max(1, Math.min(World.SZ - 1, pos.z));
-
-    // fell off the isle into the sky — float back to camp
-    if (pos.y < World.MIN_Y - 10) {
-      var camp = Store.data.player.camp;
-      if (camp && camp.isle === Store.data.player.isle) {
-        spawnAt(camp.x, camp.z);
-        if (window.UI && UI.toast) UI.toast("🪂 A friendly wind carried you back to your bedroll!");
-      } else {
-        spawnAt(World.SX / 2, World.SZ / 2);
-        if (window.UI && UI.toast) UI.toast("🪂 A friendly wind carried you back!");
+    // gentle push-out from solid objects and structure walls
+    var cols = Objects.collidersNear(pos.x, pos.z);
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i];
+      var ox = pos.x - c.x, oz = pos.z - c.z;
+      var d = Math.hypot(ox, oz);
+      var min = c.r + RADIUS;
+      if (d < min && d > 0.0001) {
+        pos.x = c.x + (ox / d) * min;
+        pos.z = c.z + (oz / d) * min;
       }
+    }
+    if (window.Build) Build.collideCircle(pos, RADIUS, HEIGHT);
+
+    // grotto walls
+    if (Terrain.inGrotto) {
+      var gr = Terrain.grotto;
+      var gx = pos.x - gr.x, gz = pos.z - gr.z;
+      var gd = Math.hypot(gx, gz);
+      var gmax = gr.r - 0.7;
+      if (gd > gmax) { pos.x = gr.x + (gx / gd) * gmax; pos.z = gr.z + (gz / gd) * gmax; }
+    }
+
+    // world border
+    pos.x = Math.max(1, Math.min(Terrain.SX - 1, pos.x));
+    pos.z = Math.max(1, Math.min(Terrain.SZ - 1, pos.z));
+
+    // vertical
+    onGround = false;
+    pos.y += vel.y * dt;
+    var ground = groundAt(pos.x, pos.z, pos.y);
+    if (ground > -Infinity && pos.y <= ground) {
+      // smooth snap: never pop up more than a step at once
+      if (ground - pos.y < 2) { pos.y = ground; vel.y = 0; onGround = true; }
+      else { pos.y = ground; vel.y = 0; onGround = true; }
+    }
+
+    // fell off the isle — a friendly wind carries you home
+    if (pos.y < -70) {
+      var camp = (window.Build ? Build.campSpot() : null);
+      if (camp) spawnAt(camp.x, camp.z);
+      else spawnAt(Terrain.CX, Terrain.CZ);
+      if (window.UI && UI.toast) UI.toast("🪂 A friendly wind carried you back!");
     }
 
     // footsteps
@@ -107,7 +130,6 @@ var Player = (function () {
       if (stepAccum > 0.38) { stepAccum = 0; GameAudio.sfx.step(); }
     }
 
-    // camera with a light head-bob while walking
     var bob = moving && onGround ? Math.sin(performance.now() / 130) * 0.04 : 0;
     camera.position.set(pos.x, pos.y + EYE + bob, pos.z);
     camera.rotation.set(0, 0, 0);
@@ -115,47 +137,35 @@ var Player = (function () {
     camera.rotateX(pitch);
   }
 
-  /* raycast from screen center into the voxel world */
+  /* ray helpers for interaction / placement */
   var raycaster = new THREE.Raycaster();
-  function raycastBlock(maxDist) {
+  function ray() {
     raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-    raycaster.far = maxDist || CONFIG.MOVE.reach;
-    var hits = raycaster.intersectObjects(World.meshes, false);
-    if (!hits.length) return null;
-    var hit = hits[0];
-    var p = hit.point;
-    // step a hair along the ray: just past the surface = the block hit,
-    // just before it = where a new block goes (works for cross-planes too)
-    var d = raycaster.ray.direction;
-    var e = 0.005;
-    return {
-      block: {
-        x: Math.floor(p.x + d.x * e),
-        y: Math.floor(p.y + d.y * e),
-        z: Math.floor(p.z + d.z * e)
-      },
-      place: {
-        x: Math.floor(p.x - d.x * e),
-        y: Math.floor(p.y - d.y * e),
-        z: Math.floor(p.z - d.z * e)
-      },
-      distance: hit.distance,
-      point: p
-    };
+    return raycaster;
   }
 
-  function wouldIntersectPlayer(bx, by, bz) {
-    return bx + 1 > pos.x - WIDTH / 2 && bx < pos.x + WIDTH / 2 &&
-           by + 1 > pos.y            && by < pos.y + HEIGHT &&
-           bz + 1 > pos.z - WIDTH / 2 && bz < pos.z + WIDTH / 2;
+  function terrainHit(maxDist) {
+    var rc = ray();
+    rc.far = maxDist || 30;
+    if (!Terrain.groundMesh) return null;
+    var hits = rc.intersectObject(Terrain.groundMesh, false);
+    return hits.length ? hits[0] : null;
+  }
+
+  function wouldIntersectPlayer(x0, y0, z0, x1, y1, z1) {
+    return x1 > pos.x - RADIUS && x0 < pos.x + RADIUS &&
+           y1 > pos.y && y0 < pos.y + HEIGHT &&
+           z1 > pos.z - RADIUS && z0 < pos.z + RADIUS;
   }
 
   return {
     init: init, spawnAt: spawnAt, look: look, update: update,
-    raycastBlock: raycastBlock, wouldIntersectPlayer: wouldIntersectPlayer,
+    ray: ray, terrainHit: terrainHit, wouldIntersectPlayer: wouldIntersectPlayer,
     move: move,
     set jump(v) { wantJump = v; },
     get position() { return pos; },
-    get yaw() { return yaw; }
+    get yaw() { return yaw; },
+    get pitch() { return pitch; },
+    get grounded() { return onGround; }
   };
 })();

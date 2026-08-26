@@ -45,6 +45,17 @@ var UI = (function () {
     $("sparks-label").textContent = CONFIG.BRAND.currencyIcon + " " + p.sparks;
     var need = xpNeeded(p.level);
     $("xp-fill").style.width = Math.min(100, (p.xp / need) * 100) + "%";
+    // isle light: lightsprings restored
+    var sl = $("springs-label");
+    if (sl && window.Terrain && Terrain.zones) {
+      if (Terrain.zones.length) {
+        var done = Terrain.zones.filter(function (z) { return z.restored; }).length;
+        sl.style.display = "";
+        sl.textContent = "🕯️ " + done + "/" + Terrain.zones.length;
+      } else {
+        sl.style.display = "none";
+      }
+    }
   }
 
   function updateQuestHud() {
@@ -57,92 +68,143 @@ var UI = (function () {
       (have >= q.count ? "  ✅ Go see " + q.giver + "!" : "");
   }
 
-  /* ---------------- hotbar ---------------- */
-  var selectedIndex = -1;
-  function hotbarItems() {
-    var inv = Store.data.player.inventory;
-    var hand = ["bucket", "water bucket", "sunfruit seeds", "moonmelon seeds"].filter(function (k) { return (inv[k] || 0) > 0; });
-    var placeable = Object.keys(inv).filter(function (k) {
-      return inv[k] > 0 && ITEM_TO_BLOCK[k] !== undefined && hand.indexOf(k) < 0;
-    });
-    return hand.concat(placeable).slice(0, 8);
+  /* ---------------- contextual prompt (replaces crosshair feedback) ---------------- */
+  var promptShown = false;
+  function setPrompt(icon, text, frac) {
+    var el = $("prompt");
+    if (!icon) {
+      if (promptShown) { el.classList.remove("show"); promptShown = false; }
+      return;
+    }
+    promptShown = true;
+    var pips = "";
+    if (frac !== null && frac !== undefined && frac < 1) {
+      var total = 4;
+      var left = Math.ceil(frac * total);
+      pips = "<span class='prompt-pips'>";
+      for (var i = 0; i < total; i++) pips += "<i class='" + (i < left ? "on" : "") + "'></i>";
+      pips += "</span>";
+    }
+    el.innerHTML = "<span class='prompt-icon'>" + icon + "</span><span class='prompt-text'>" + text + "</span>" + pips;
+    el.classList.add("show");
   }
 
-  function updateHotbar() {
-    var bar = $("hotbar");
-    bar.innerHTML = "";
-    var items = hotbarItems();
-    var inv = Store.data.player.inventory;
-    items.forEach(function (item, i) {
-      var slot = document.createElement("div");
-      slot.className = "slot" + (i === selectedIndex ? " selected" : "");
-      slot.innerHTML = "<span class='slot-icon'>" + (ITEM_ICON[item] || "⬜") +
-        "</span><span class='slot-count'>" + inv[item] + "</span>";
-      slot.addEventListener("pointerdown", function (e) {
+  /* ---------------- gain popup (+2 🪵 timber ...) ---------------- */
+  var gainTimer = null;
+  function gainPopup(text) {
+    var el = $("gain-popup");
+    el.textContent = text;
+    el.classList.remove("pop");
+    void el.offsetWidth;              // restart the animation
+    el.classList.add("pop");
+    clearTimeout(gainTimer);
+    gainTimer = setTimeout(function () { el.classList.remove("pop"); }, 1500);
+  }
+
+  /* ---------------- build sheet ---------------- */
+  function showBuildSheet() {
+    $("build-sheet").classList.add("open");
+    updateBuildSheet();
+  }
+  function hideBuildSheet() {
+    $("build-sheet").classList.remove("open");
+  }
+  function updateBuildSheet() {
+    var sheet = $("build-pieces");
+    if (!sheet || !$("build-sheet").classList.contains("open")) return;
+    sheet.innerHTML = "";
+    Build.PIECES.forEach(function (p) {
+      var locked = p.needs && !Store.data.player.tools[p.needs];
+      var afford = Build.canAfford(p.cost);
+      var card = document.createElement("button");
+      card.className = "piece-card" + (Build.activePiece === p.id && !Build.removeMode ? " active" : "") +
+        (locked ? " locked" : (afford ? "" : " poor"));
+      card.innerHTML = "<span class='piece-icon'>" + p.icon + "</span>" +
+        "<span class='piece-name'>" + p.name + "</span>" +
+        "<span class='piece-cost'>" + (locked ? "🔒 Wren's secret" : Object.keys(p.cost).map(function (k) {
+          return p.cost[k] + (ITEM_ICON[k] || k);
+        }).join(" ")) + "</span>";
+      card.addEventListener("pointerdown", function (e) {
         e.stopPropagation();
-        selectHotbar(i);
+        if (locked) { toast("🔒 Wren the Tinker teaches this one!"); return; }
+        Build.setPiece(p.id);
+        updateBuildSheet();
       });
-      bar.appendChild(slot);
+      sheet.appendChild(card);
     });
-    if (selectedIndex >= items.length) selectedIndex = -1;
-    updateCraftButton();
-  }
-
-  function selectHotbar(i) {
-    var items = hotbarItems();
-    if (i < 0 || i >= items.length) return;
-    selectedIndex = i;
-    Game.selectedItem = items[i];
-    var isSeed = items[i].indexOf("seeds") >= 0;
-    if (Game.mode !== "build" && !isSeed && items[i] !== "bucket") Game.setMode("build");
-    updateHotbar();
-  }
-
-  function selectedItem() {
-    var items = hotbarItems();
-    return selectedIndex >= 0 && selectedIndex < items.length ? items[selectedIndex] : null;
+    $("build-remove").classList.toggle("active", Build.removeMode);
   }
 
   function updateModeButton() {
-    $("btn-mode").textContent = Game.mode === "gather" ? "🔨" : "🧱";
-    $("btn-mode").classList.toggle("build", Game.mode === "build");
+    var on = Build.mode;
+    $("btn-mode").textContent = on ? "✖️" : "🛠️";
+    $("btn-mode").classList.toggle("build", on);
   }
 
-  /* ---------------- pack (inventory) screen ---------------- */
+  // kept as a safe alias — old callers refresh the build sheet instead
+  function updateHotbar() { updateBuildSheet(); updateCraftButton(); }
+
+  /* ---------------- satchel ---------------- */
+  var SATCHEL_GROUPS = [
+    { name: "Materials", items: ["timber", "stone", "leaves", "claybrick", "glass", "fluff", "emberstone",
+        "skysteel ore", "skysteel", "starstone", "glimmer", "glowmoss", "moonpearl", "aurorium"] },
+    { name: "Garden & Goodies", items: ["berries", "sunfruit", "moonmelon", "berry tart",
+        "sunfruit seeds", "moonmelon seeds", "sunpetal", "bellbloom", "spritecap"] },
+    { name: "Treasures", items: ["feather", "shell", "glowdust"] }
+  ];
+  var ITEM_BLURB = {
+    berries: "🫐 Yummy! Friends might want these — or bake a tart at the kiln.",
+    sunfruit: "🍊 Sweet sunfruit, fresh from your planter!",
+    moonmelon: "🍈 A cool moonmelon. Great trade goods!",
+    "skysteel ore": "🔩 Raw ore — smelt it in Wren's kiln!",
+    skysteel: "⚙️ A skysteel ingot — for a better mallet!",
+    "sunfruit seeds": "🌱 Build a planter (🛠️), then tap it to plant!",
+    "moonmelon seeds": "🌱 Build a planter (🛠️), then tap it to plant!",
+    feather: "🪶 A soft puffbird feather.",
+    shell: "🐚 A shiny shellhopper shell.",
+    glowdust: "💫 Twinkling glowdust from a glowmoth.",
+    "berry tart": "🥧 A warm berry tart. Mmm!",
+    fluff: "☁️ Tuftle fluff — bridges and tents need it!",
+    timber: "🪵 The heart of every build. Chop trees for more!",
+    stone: "🪨 Quarried from outcrops. Walls love it!"
+  };
+
   function showInventory() {
     var p = Store.data.player;
     var inv = p.inventory;
-    var items = Object.keys(inv).filter(function (k) { return inv[k] > 0; });
-
-    var grid = items.length
-      ? items.map(function (item) {
-          var placeable = ITEM_TO_BLOCK[item] !== undefined;
-          return "<button class='inv-slot" + (placeable ? "" : " inv-flat") + "' data-item='" + item + "'>" +
-            "<span class='inv-icon'>" + (ITEM_ICON[item] || "⬜") + "</span>" +
-            "<span class='inv-count'>" + inv[item] + "</span>" +
-            "<span class='inv-name'>" + item + "</span></button>";
-        }).join("")
-      : "<div class='ch-sub'>Your pack is empty — go gather something!</div>";
 
     var malletNames = ["Timber Mallet", "Stone Mallet", "Skysteel Mallet", "Starstone Mallet"];
     var toolsHtml = "<div class='inv-tools'>" +
       "<span class='inv-tool'>🔨 " + malletNames[p.toolTier] + "</span>" +
+      (p.tools.hatchet ? "<span class='inv-tool'>🪓 Hatchet</span>" : "") +
+      (p.tools.brush ? "<span class='inv-tool'>🖌️ Brush</span>" : "") +
       (p.tools.drill ? "<span class='inv-tool legendary'>🌀 Rootbreaker Drill</span>" : "") +
       (p.tools.skybadge ? "<span class='inv-tool legendary'>🎈 Skyrider Badge</span>" : "") +
       (p.tools.sunhammer ? "<span class='inv-tool legendary'>☀️ Sunforged Mallet</span>" : "") +
-      (p.tools.spade ? "<span class='inv-tool'>🥄 Spade</span>" : "") +
-      (p.tools.hatchet ? "<span class='inv-tool'>🪓 Hatchet</span>" : "") +
-      (p.tools.brush ? "<span class='inv-tool'>🖌️ Brush</span>" : "") +
       (p.tools.kiln ? "<button class='inv-tool legendary inv-station'>🔥 Sky Kiln</button>" : "") +
-      (p.tools.lanternkit ? "<button class='inv-tool legendary inv-station'>🏮 Lantern Kit</button>" : "") +
+      (p.tools.lanternkit ? "<span class='inv-tool legendary'>🏮 Lantern Kit</span>" : "") +
       "</div>";
 
+    var groupsHtml = "";
+    SATCHEL_GROUPS.forEach(function (grp) {
+      var have = grp.items.filter(function (k) { return (inv[k] || 0) > 0; });
+      if (!have.length) return;
+      groupsHtml += "<div class='satchel-group'><div class='satchel-label'>" + grp.name + "</div><div class='satchel-row'>" +
+        have.map(function (item) {
+          return "<button class='satchel-item' data-item='" + item + "'>" +
+            "<span class='inv-icon'>" + (ITEM_ICON[item] || "▫️") + "</span>" +
+            "<span class='inv-count'>" + inv[item] + "</span>" +
+            "<span class='inv-name'>" + item + "</span></button>";
+        }).join("") + "</div></div>";
+    });
+    if (!groupsHtml) groupsHtml = "<div class='ch-sub'>Your satchel is empty — go gather something!</div>";
+
     openOverlay(
-      "<div class='ch-title'>🎒 " + Store.profile.name + "'s Pack</div>" +
+      "<div class='ch-title'>🎒 " + Store.profile.name + "'s Satchel</div>" +
       "<div class='ch-sub'>" + CONFIG.BRAND.currencyIcon + " " + p.sparks + " sparks · Lv " + p.level + " " + rankFor(p.level) + "</div>" +
       toolsHtml +
-      "<div class='inv-grid'>" + grid + "</div>" +
-      "<div class='ch-sub'>Tap a block to build with it!</div>" +
+      "<div class='satchel-scroll'>" + groupsHtml + "</div>" +
+      "<div class='ch-sub'>Build with 🛠️ · craft tools with TINKER · smelt at the KILN</div>" +
       "<button class='big-btn' id='inv-close'>BACK TO THE GAME</button>"
     );
     $("inv-close").addEventListener("pointerdown", closeOverlay);
@@ -153,46 +215,11 @@ var UI = (function () {
         doKiln();
       });
     });
-    document.querySelectorAll(".inv-slot").forEach(function (slot) {
+    document.querySelectorAll(".satchel-item").forEach(function (slot) {
       slot.addEventListener("pointerdown", function () {
         var item = slot.getAttribute("data-item");
-        if (ITEM_TO_BLOCK[item] === undefined) {
-          if (item === "bucket" || item === "water bucket") {
-            closeOverlay();
-            Game.selectedItem = item;
-            var idxB = hotbarItems().indexOf(item);
-            if (idxB >= 0) selectHotbar(idxB);
-            toast(item === "bucket" ? "🪣 Tap a water block to fill it!" : "💧 Tap to pour a pool!");
-            return;
-          }
-          if (item.indexOf("seeds") >= 0) {
-            closeOverlay();
-            Game.selectedItem = item;
-            var idxS = hotbarItems().indexOf(item);
-            if (idxS >= 0) selectHotbar(idxS);
-            toast("🌱 Tap a garden bed to plant " + item + "!");
-            return;
-          }
-          GameAudio.sfx.pop();
-          toast(item === "berries" ? "🫐 Yummy berries! Someone might want these..." :
-            item === "sunfruit" ? "🍊 Sweet sunfruit, fresh from the garden!" :
-            item === "moonmelon" ? "🍈 A cool moonmelon — great trade goods!" :
-            item === "skysteel ore" ? "🔩 Raw skysteel ore — smelt it in Wren's kiln!" :
-            item === "skysteel" ? "⚙️ A skysteel ingot — craft a bucket or a better mallet!" :
-            item === "rods" ? "🥢 Rods — craft ladders, fences, a spade, or a hatchet!" :
-            item === "feather" ? "🪶 A soft puffbird feather." :
-            item === "shell" ? "🐚 A shiny shellhopper shell." :
-            item === "glowdust" ? "💫 Twinkling glowdust from a glowmoth." :
-            item === "berry tart" ? "🥧 A warm berry tart. Mmm!" :
-            "You can't place " + item + " — but it might be useful!");
-          return;
-        }
-        closeOverlay();
-        Game.selectedItem = item;
-        Game.setMode("build");
-        var idx = hotbarItems().indexOf(item);
-        if (idx >= 0) selectHotbar(idx);
-        toast("🧱 Building with " + item + "!");
+        GameAudio.sfx.pop();
+        toast(ITEM_BLURB[item] || (ITEM_ICON[item] || "") + " " + item + " — surely useful for something!");
       });
     });
   }
@@ -210,23 +237,10 @@ var UI = (function () {
   ];
 
   var WORKSHOP = [
-    { id: "planks", kind: "build", name: "4 planks", icon: "🟧", needs: { timber: 1 }, gives: { planks: 4 } },
-    { id: "rods", kind: "build", name: "4 rods", icon: "🥢", needs: { planks: 2 }, gives: { rods: 4 } },
-    { id: "door", kind: "build", name: "door", icon: "🚪", needs: { planks: 6 }, gives: { door: 1 } },
-    { id: "ladder", kind: "build", name: "3 ladders", icon: "🪜", needs: { rods: 7 }, gives: { ladder: 3 } },
-    { id: "fence", kind: "build", name: "3 fences", icon: "🚧", needs: { planks: 2, rods: 4 }, gives: { fence: 3 } },
-    { id: "bedroll", kind: "build", name: "bedroll", icon: "🛏️", needs: { fluff: 3, planks: 3 }, gives: { bedroll: 1 } },
-    { id: "bench", kind: "build", name: "tinker bench", icon: "🛠️", needs: { planks: 4 }, gives: { "tinker bench": 1 } },
-    { id: "garden", kind: "build", name: "2 garden beds", icon: "🟫", needs: { earth: 2, timber: 1 }, gives: { "garden bed": 2 },
-      blurb: "Plant seeds and grow sunfruit!" },
-    { id: "spade", kind: "tool", tool: "spade", name: "spade", icon: "🥄",
-      needs: { stone: 3, rods: 2 }, blurb: "Digs earth, sand, and snow extra fast!" },
     { id: "hatchet", kind: "tool", tool: "hatchet", name: "hatchet", icon: "🪓",
-      needs: { stone: 3, rods: 2 }, blurb: "Chops timber and leaves extra fast!" },
+      needs: { stone: 3, timber: 2 }, blurb: "Chops trees down in fewer swings!" },
     { id: "brush", kind: "tool", tool: "brush", name: "brush", icon: "🖌️",
-      needs: { rods: 2, fluff: 1 }, blurb: "Brush tuftles for fluff — they love it!" },
-    { id: "bucket", kind: "tool", name: "bucket", icon: "🪣",
-      needs: { skysteel: 3 }, gives: { bucket: 1 }, blurb: "Scoop water, then pour a pool anywhere!" }
+      needs: { timber: 2, fluff: 1 }, blurb: "Brush tuftles for fluff — they love it!" }
   ];
 
   function canAfford(needs) {
@@ -275,9 +289,8 @@ var UI = (function () {
   /* ---------------- Wren's kiln recipes ---------------- */
   var KILN = [
     { need: "kiln", needs: { "skysteel ore": 1, emberstone: 1 }, gives: { skysteel: 1 }, name: "skysteel ingot", icon: "⚙️" },
-    { need: "kiln", needs: { cloudsand: 1, emberstone: 1 }, gives: { glass: 1 }, name: "glass", icon: "🪟" },
-    { need: "kiln", needs: { berries: 2, emberstone: 1 }, gives: { "berry tart": 1 }, name: "berry tart", icon: "🥧" },
-    { need: "lanternkit", needs: { timber: 1, emberstone: 1 }, gives: { lantern: 4 }, name: "4 lanterns", icon: "🏮" }
+    { need: "kiln", needs: { stone: 2, emberstone: 1 }, gives: { glass: 1 }, name: "glass", icon: "🪟" },
+    { need: "kiln", needs: { berries: 2, emberstone: 1 }, gives: { "berry tart": 1 }, name: "berry tart", icon: "🥧" }
   ];
 
   function availableKiln() {
@@ -423,7 +436,6 @@ var UI = (function () {
     });
   }
 
-  var gardenBonusGiven = false;
   function doWorkshop(r) {
     if (!canAfford(r.needs)) return;
     if (r.tool) {
@@ -442,13 +454,7 @@ var UI = (function () {
     }
     takeNeeds(r.needs);
     if (r.gives) giveItems(r.gives);
-    if (r.id === "garden" && !Store.data.player.seeds.starter) {
-      Store.data.player.seeds.starter = true;
-      giveItems({ "sunfruit seeds": 2 });
-      toast("🟫 Garden beds ready — plus 2 starter sunfruit seeds! 🌱", 3200);
-    } else {
-      toast(r.icon + " Crafted " + r.name + "!", 2200);
-    }
+    toast(r.icon + " Crafted " + r.name + "!", 2200);
     Store.save();
     GameAudio.sfx.kiln();
     updateHotbar();
@@ -922,13 +928,23 @@ var UI = (function () {
     ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) {
       jb.addEventListener(ev, function () { Player.jump = false; });
     });
+    // build sheet controls
+    $("build-rotate").addEventListener("pointerdown", function (e) { e.stopPropagation(); Build.rotate(); });
+    $("build-remove").addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      Build.toggleRemove();
+      updateBuildSheet();
+      toast(Build.removeMode ? "🧹 Tap a piece to take it back" : "🛠️ Placing pieces again", 1600);
+    });
+    $("build-done").addEventListener("pointerdown", function (e) { e.stopPropagation(); Game.toggleMode(); });
     holdToOpen($("btn-home-parent"), function () { Parent.show(); });
   }
 
   return {
     init: init, toast: toast, updateHud: updateHud, updateHotbar: updateHotbar,
     updateQuestHud: updateQuestHud, updateModeButton: updateModeButton,
-    selectHotbar: selectHotbar, selectedItem: selectedItem,
+    setPrompt: setPrompt, gainPopup: gainPopup,
+    showBuildSheet: showBuildSheet, hideBuildSheet: hideBuildSheet, updateBuildSheet: updateBuildSheet,
     showChallenge: showChallenge, showDialogue: showDialogue,
     showInventory: showInventory, toggleInventory: toggleInventory,
     showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
