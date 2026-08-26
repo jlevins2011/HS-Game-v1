@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Lumen Isles — Explore. Build. Shine.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+<div id="vignette"></div>
+
+<!-- ============ HOME SCREEN ============ -->
+<div id="home">
+  <div id="home-sky"><div class="home-isle"></div><div class="home-cloud c1"></div><div class="home-cloud c2"></div><div class="home-cloud c3"></div></div>
+  <div id="home-inner">
+    <h1 id="home-title">✨ Lumen Isles</h1>
+    <div class="subtitle" id="home-tag">Explore. Build. Shine.</div>
+    <div class="subtitle">Who's playing today?</div>
+    <div id="player-buttons"></div>
+    <div id="home-empty" style="display:none" class="subtitle">Tap NEW EXPLORER to begin your adventure!</div>
+  </div>
+  <button id="btn-home-parent">🗝️ Parents</button>
+</div>
+
+<!-- ============ IN-GAME HUD ============ -->
+<div id="hud">
+  <div id="top-strip">
+    <span class="pill" id="level-label">Lv 1</span>
+    <span class="pill" id="rank-label">Firefly Friend</span>
+    <div id="xp-bar"><div id="xp-fill"></div></div>
+    <span class="pill" id="sparks-label">✨ 0</span>
+  </div>
+  <button id="btn-pause">☰</button>
+  <div id="quest-hud"><span id="quest-hud-text"></span></div>
+
+  <div id="crosshair"></div>
+  <div id="gather-progress"><div id="gather-progress-fill"></div></div>
+  <div id="toast"></div>
+
+  <div id="joy-base"><div id="joy-knob"></div></div>
+  <button class="action-btn" id="btn-jump">⬆️</button>
+  <button class="action-btn" id="btn-mode">🔨</button>
+  <button class="action-btn" id="btn-bag">🎒</button>
+  <button id="btn-craft">🛠️ TINKER!</button>
+  <button id="btn-kiln">🔥 KILN!</button>
+  <div id="hotbar"></div>
+</div>
+
+<!-- ============ MODAL OVERLAY (challenges, dialogue, menus) ============ -->
+<div id="overlay"><div id="overlay-card"></div></div>
+
+<!-- three.js r128: vendored copy when present (fully offline), CDN fallback otherwise -->
+<script src="vendor/three.min.js"></script>
+<script>
+if (!window.THREE) {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
+}
+</script>
+
+<script src="js/config.js"></script>
+<script src="js/content/reading2.js"></script>
+<script src="js/content/reading5.js"></script>
+<script src="js/content/spelling2.js"></script>
+<script src="js/content/spelling5.js"></script>
+<script src="js/content/latin.js"></script>
+<script src="js/content/bible.js"></script>
+<script src="js/content/math.js"></script>
+<script src="js/store.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/learning.js"></script>
+<script src="js/activities.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/world.js"></script>
+<script src="js/player.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/npcs.js"></script>
+<script src="js/garden.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/parent.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
