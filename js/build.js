@@ -10,6 +10,7 @@
 var Build = (function () {
   var CELL = 2;
   var WALL_H = 2.4;
+  var DOOR_HALF = 0.6;      // the doorway opening is DOOR_HALF*2 wide
 
   var scene = null;
   var isleState = null;
@@ -30,7 +31,7 @@ var Build = (function () {
       desc: "A sturdy platform. Stack walls on it, or aim at a wall top for an upper story." },
     { id: "wall", name: "Wall", icon: "▮", cost: { timber: 2 }, desc: "Plank wall on a cell edge. Rotate to face it." },
     { id: "window", name: "Window Wall", icon: "⊞", cost: { timber: 2, glass: 1 }, desc: "A wall with a bright window." },
-    { id: "door", name: "Doorway", icon: "🚪", cost: { timber: 3 }, desc: "A wall with a doorway to walk through." },
+    { id: "door", name: "Door", icon: "🚪", cost: { timber: 3 }, desc: "A real door — tap it to swing it open and shut." },
     { id: "roof", name: "Roof", icon: "⌂", cost: { timber: 2 }, desc: "A cozy gable roof. Sits on wall tops." },
     { id: "stairs", name: "Stairs", icon: "𝍖", cost: { timber: 2 }, desc: "Chunky steps. Two flights reach a full story." },
     { id: "fence", name: "Fence", icon: "🚧", cost: { timber: 1 }, desc: "Keeps tuftles out. Or in." },
@@ -87,8 +88,22 @@ var Build = (function () {
       g.box(CELL, 0.16, TH + 0.06, WOOD_D, o(0, WALL_H - 0.16, 0), 0.1);
       g.box(CELL, 0.14, TH + 0.06, WOOD_D, o(0, 0, 0), 0.1);
       if (t === "door") {
-        // a lintel over the opening so the doorway reads as a doorway
+        // lintel over the opening
         g.box(CELL * 0.62, 0.18, TH + 0.04, WOOD_D, o(0, 1.95, 0), 0.1);
+        // the door leaf itself, hinged on the left post. Closed it fills the
+        // opening; open it swings clear so you can walk through.
+        var swing = pose.open ? -1.62 : 0;               // ~93 degrees
+        var hx = -DOOR_HALF;                              // hinge, local x
+        var lx = hx + DOOR_HALF * Math.cos(swing);
+        var lz = -DOOR_HALF * Math.sin(swing);
+        g.box(DOOR_HALF * 2 - 0.06, 1.92, 0.12, WOOD_L, o(lx, 0.02, lz, { ry: swing }), 0.1);
+        // three plank lines + a round handle so it reads as a door
+        g.box(DOOR_HALF * 2 - 0.12, 0.07, 0.15, WOOD_D, o(lx, 0.35, lz, { ry: swing }), 0.05);
+        g.box(DOOR_HALF * 2 - 0.12, 0.07, 0.15, WOOD_D, o(lx, 1.5, lz, { ry: swing }), 0.05);
+        var handleLocal = DOOR_HALF * 2 - 0.28;
+        g.blob(0.09, 0xf2ca55, o(lx + (handleLocal - DOOR_HALF) * Math.cos(swing),
+                                 1.0,
+                                 lz - (handleLocal - DOOR_HALF) * Math.sin(swing)), 0, 0);
       }
     } else if (t === "roof") {
       // gable prism with overhang
@@ -182,6 +197,11 @@ var Build = (function () {
       var rl = rectFor(-0.8, 0, 0.4, 0.3), rr = rectFor(0.8, 0, 0.4, 0.3);
       solids.push({ x0: rl.x0, y0: p.y, z0: rl.z0, x1: rl.x1, y1: p.y + WALL_H, z1: rl.z1 });
       solids.push({ x0: rr.x0, y0: p.y, z0: rr.z0, x1: rr.x1, y1: p.y + WALL_H, z1: rr.z1 });
+      // a shut door blocks the opening; an open one leaves it clear
+      if (!p.open) {
+        var rd = rectFor(0, 0, DOOR_HALF * 2, 0.3);
+        solids.push({ x0: rd.x0, y0: p.y, z0: rd.z0, x1: rd.x1, y1: p.y + 1.94, z1: rd.z1 });
+      }
       var rt = rectFor(0, 0, CELL, 0.3);
       tops.push({ x0: rt.x0, z0: rt.z0, x1: rt.x1, z1: rt.z1, top: p.y + WALL_H });
     } else if (p.t === "fence") {
@@ -299,6 +319,19 @@ var Build = (function () {
   // Prefer the HIGHEST surface at (or just below) where the child is pointing.
   // Aiming at a floor's edge then puts the wall on the floor rather than on the
   // dirt underneath it, so a room's walls all line up at the same height.
+  // A roof caps the WALLS around a tile, and walls sit on the tile's edges —
+  // so look at the four edges as well as the middle, otherwise the roof drops
+  // to floor level inside the room instead of sitting on top of the house.
+  function roofSupportsAt(cx, cz) {
+    var list = supportsAt(cx, cz);
+    var edges = [[CELL / 2, 0], [-CELL / 2, 0], [0, CELL / 2], [0, -CELL / 2]];
+    for (var i = 0; i < edges.length; i++) {
+      var s = supportsAt(cx + edges[i][0], cz + edges[i][1]);
+      for (var j = 0; j < s.length; j++) list.push(s[j]);
+    }
+    return list;
+  }
+
   function nearestSupport(x, z, aimY) {
     var list = supportsAt(x, z);
     if (!list.length) return null;
@@ -372,15 +405,22 @@ var Build = (function () {
       } else {
         pose.y = under - 0.12;
       }
+    } else if (activePiece === "roof") {
+      // Roofs are deliberately forgiving. Looking up at open sky (the natural
+      // thing to do when you want a roof) targets the tile you are standing
+      // in, and the roof always caps the tallest thing on that tile.
+      if (!roofSupportsAt(pose.x, pose.z).length) {
+        var pc = snapCell(Player.position.x, Player.position.z);
+        pose.x = pc.x;
+        pose.z = pc.z;
+      }
+      var list = roofSupportsAt(pose.x, pose.z);
+      if (!list.length) { pose.valid = false; pose.reason = "Stand in your house and look up!"; }
+      else pose.y = Math.max.apply(null, list);
     } else {
       var sup4 = nearestSupport(pose.x, pose.z, aim.y);
       if (sup4 === null) { pose.valid = false; pose.reason = "No ground here"; }
       else pose.y = sup4;
-      if (activePiece === "roof") {
-        // a roof always caps whatever is on the tile — point anywhere at it
-        var list = supportsAt(pose.x, pose.z);
-        if (list.length) pose.y = Math.max.apply(null, list);
-      }
     }
 
     if (pose.valid) {
@@ -410,6 +450,10 @@ var Build = (function () {
       if (p.t !== pose.t) return false;
       if (pose.t === "bridge") {
         return Math.hypot(p.x - pose.x, p.z - pose.z) < 2.2 && Math.abs(p.y - pose.y) < 0.6;
+      }
+      // one roof per tile, whatever height — otherwise they stack forever
+      if (pose.t === "roof") {
+        return Math.abs(p.x - pose.x) < 0.4 && Math.abs(p.z - pose.z) < 0.4;
       }
       return Math.abs(p.x - pose.x) < 0.4 && Math.abs(p.z - pose.z) < 0.4 &&
              Math.abs(p.y - pose.y) < 0.4 && (p.r % 2) === (pose.r % 2);
@@ -444,14 +488,18 @@ var Build = (function () {
 
   /* ---------------- placing / removing ---------------- */
   function place() {
-    if (!mode || removeMode || !ghostPose || !ghostPose.valid) {
-      if (ghostPose && !ghostPose.valid && ghostPose.reason) UI.toast(ghostPose.reason, 1800);
+    if (!mode || removeMode) return false;
+    // Recompute from the live camera: a tap must build what the child is
+    // aiming at right now, not whatever the last rendered frame cached.
+    updateGhost();
+    if (!ghostPose || !ghostPose.valid) {
+      if (ghostPose && ghostPose.reason) UI.toast(ghostPose.reason, 1800);
       return false;
     }
     var def = pieceDef(activePiece);
     var inv = Store.data.player.inventory;
     Object.keys(def.cost).forEach(function (k) { inv[k] -= def.cost[k]; });
-    var rec = { t: ghostPose.t, x: ghostPose.x, y: ghostPose.y, z: ghostPose.z, r: ghostPose.r };
+    var rec = { t: activePiece, x: ghostPose.x, y: ghostPose.y, z: ghostPose.z, r: ghostPose.r };
     if (ghostPose.ry !== undefined) rec.ry = ghostPose.ry;
     addPiece(rec);
     isleState.pieces.push(rec);
@@ -465,7 +513,8 @@ var Build = (function () {
   }
 
   function addPiece(rec) {
-    var p = { t: rec.t, x: rec.x, y: rec.y, z: rec.z, r: rec.r, ry: rec.ry };
+    var p = { t: rec.t, x: rec.x, y: rec.y, z: rec.z, r: rec.r, ry: rec.ry, open: !!rec.open };
+    p.rec = rec;                       // so state changes (a door swinging) persist
     var g = new Geo.Builder();
     buildPieceGeo(g, p.t, p);
     p.mesh = g.build();
@@ -476,6 +525,66 @@ var Build = (function () {
     if (p.t === "lantern") addLanternLight(p);
     if (p.t === "planter" && window.Garden) Garden.registerPlanter(p);
     return p;
+  }
+
+  // redraw one piece in place (used when a door swings)
+  function rebuildPiece(p) {
+    group.remove(p.mesh);
+    p.mesh.geometry.dispose();
+    var g = new Geo.Builder();
+    buildPieceGeo(g, p.t, p);
+    p.mesh = g.build();
+    p.mesh.userData.piece = p;
+    group.add(p.mesh);
+    computePhysics(p);
+  }
+
+  // A generous tap target for doors. Once a door is open the child is aiming
+  // through an empty gap, so a plain mesh ray would sail past it — this gives
+  // the doorway itself a soft hit sphere when you are standing right at it.
+  function doorRaycast(origin, dir, maxDist) {
+    var best = null;
+    for (var i = 0; i < pieces.length; i++) {
+      var p = pieces[i];
+      if (p.t !== "door") continue;
+      var cx = p.x - origin.x, cy = (p.y + 1.0) - origin.y, cz = p.z - origin.z;
+      var t = cx * dir.x + cy * dir.y + cz * dir.z;
+      if (t < 0 || t > Math.min(maxDist, 3.5)) continue;
+      var px = origin.x + dir.x * t, py = origin.y + dir.y * t, pz = origin.z + dir.z * t;
+      if (Math.hypot(px - p.x, py - (p.y + 1.0), pz - p.z) < 0.75) {
+        if (!best || t < best.dist) best = { piece: p, dist: t };
+      }
+    }
+    return best;
+  }
+
+  function toggleDoor(p) {
+    if (p.t !== "door") return false;
+    p.open = !p.open;
+    if (p.rec) p.rec.open = p.open;
+    // never shut a door on top of the player
+    if (!p.open && Player && Player.position) {
+      var pos = Player.position;
+      computePhysics(p);
+      for (var i = 0; i < p.solids.length; i++) {
+        var b = p.solids[i];
+        if (pos.y + 1.5 < b.y0 || pos.y + 0.35 > b.y1) continue;
+        var cx = Math.max(b.x0, Math.min(pos.x, b.x1));
+        var cz = Math.max(b.z0, Math.min(pos.z, b.z1));
+        if (Math.hypot(pos.x - cx, pos.z - cz) < 0.4) {
+          p.open = true;
+          if (p.rec) p.rec.open = true;
+          UI.toast("🚪 Step out of the doorway first!", 1600);
+          computePhysics(p);
+          return false;
+        }
+      }
+    }
+    rebuildPiece(p);
+    Store.save();
+    GameAudio.sfx.place();
+    UI.toast(p.open ? "🚪 Creeeak... open!" : "🚪 Shut tight.", 1400);
+    return true;
   }
 
   function removeAim() {
@@ -493,7 +602,7 @@ var Build = (function () {
     group.remove(p.mesh);
     p.mesh.geometry.dispose();
     pieces.splice(pieces.indexOf(p), 1);
-    var idx = isleState.pieces.findIndex(function (r) {
+    var idx = p.rec ? isleState.pieces.indexOf(p.rec) : isleState.pieces.findIndex(function (r) {
       return r.t === p.t && Math.abs(r.x - p.x) < 0.01 && Math.abs(r.z - p.z) < 0.01 && Math.abs(r.y - p.y) < 0.01;
     });
     if (idx >= 0) isleState.pieces.splice(idx, 1);
@@ -573,7 +682,7 @@ var Build = (function () {
     enterMode: enterMode, exitMode: exitMode, setPiece: setPiece, rotate: rotate,
     toggleRemove: toggleRemove,
     floorTopAt: floorTopAt, collideCircle: collideCircle, blocksAt: blocksAt,
-    removePiece: removePiece,
+    removePiece: removePiece, toggleDoor: toggleDoor, doorRaycast: doorRaycast,
     campSpot: campSpot, bridgePiecesNear: bridgePiecesNear,
     get mode() { return mode; },
     get removeMode() { return removeMode; },

@@ -52,8 +52,10 @@ satchel, 🛠️ opens build mode.
 - **🛠️ Building**: compose real structures from floors, walls, doorways,
   windows, roofs, stairs, fences, planters, lantern posts, and a camp
   tent (your respawn point). Point at the side of a tile and the wall goes
-  there — all four sides — with ⟳ to step around; roofs cap whatever is on
-  the tile; taking a piece back refunds its materials
+  there — all four sides — with ⟳ to step around. **Doors really swing:** tap
+  one to open it, tap again to shut it (a closed door blocks the way, and it
+  stays how you left it). For a roof, stand in your house and look up — the
+  roof caps whatever is on the tile. Taking a piece back refunds its materials
 - **🔮 Wonderstones** and **🧰 curio chests** hold challenges with spark + loot rewards
 - **Elder Alder** gives SUPER CHALLENGES that earn legendary tools — the
   **Rootbreaker Drill** (opens the sealed crystal grotto beneath the isle),

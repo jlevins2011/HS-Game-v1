@@ -168,13 +168,21 @@ var Game = (function () {
       return;
     }
 
-    // planter pieces (garden)
+    // a door you're standing at is always tappable, open or shut
+    var doorHit = Build.doorRaycast(npcRaycaster.ray.origin, npcRaycaster.ray.direction, CONFIG.MOVE.reach);
+    if (doorHit && (!objHit || doorHit.dist < objHit.dist)) {
+      Build.toggleDoor(doorHit.piece);
+      return;
+    }
+
+    // built pieces (planters, doors, tents)
     npcRaycaster.far = CONFIG.MOVE.reach;
     var pieceMeshes = Build.pieces.map(function (p) { return p.mesh; });
     var pieceHits = npcRaycaster.intersectObjects(pieceMeshes, false);
     if (pieceHits.length && (!objHit || pieceHits[0].distance < objHit.dist)) {
       var piece = pieceHits[0].object.userData.piece;
       if (piece.t === "planter") { Garden.tap(piece); return; }
+      if (piece.t === "door") { Build.toggleDoor(piece); return; }
       if (piece.t === "tent") { UI.toast("⛺ Your cozy camp. Sweet dreams guaranteed."); return; }
     }
 
@@ -632,12 +640,20 @@ var Game = (function () {
       }
       return;
     }
-    var pieceMeshes = Build.pieces.filter(function (p) { return p.t === "planter"; }).map(function (p) { return p.mesh; });
-    if (pieceMeshes.length) {
+    var dh = Build.doorRaycast(npcRaycaster.ray.origin, npcRaycaster.ray.direction, CONFIG.MOVE.reach);
+    if (dh) {
+      UI.setPrompt("🚪", dh.piece.open ? "Door · tap to close" : "Door · tap to open", null);
+      return;
+    }
+    var tappable = Build.pieces.filter(function (p) { return p.t === "planter" || p.t === "door"; })
+                              .map(function (p) { return p.mesh; });
+    if (tappable.length) {
       npcRaycaster.far = CONFIG.MOVE.reach;
-      var ph = npcRaycaster.intersectObjects(pieceMeshes, false);
+      var ph = npcRaycaster.intersectObjects(tappable, false);
       if (ph.length) {
-        UI.setPrompt("🌱", Garden.promptFor(ph[0].object.userData.piece), null);
+        var hp = ph[0].object.userData.piece;
+        if (hp.t === "door") UI.setPrompt("🚪", hp.open ? "Door · tap to close" : "Door · tap to open", null);
+        else UI.setPrompt("🌱", Garden.promptFor(hp), null);
         return;
       }
     }

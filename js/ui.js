@@ -77,7 +77,7 @@ var UI = (function () {
   function setPrompt(icon, text, frac) {
     var el = $("prompt");
     if (!icon) {
-      if (promptShown) { el.classList.remove("show"); promptShown = false; }
+      if (promptShown) { el.classList.remove("show"); el.textContent = ""; promptShown = false; }
       return;
     }
     promptShown = true;

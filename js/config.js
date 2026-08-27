@@ -14,7 +14,7 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.0.1",
+    version: "2.0.2",
     built: "2026-08-27",
     currencyName: "sparks",
     currencyIcon: "✨",
