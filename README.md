@@ -114,6 +114,21 @@ Each challenge measures a distinct skill, tracked separately per item:
 - math facts, generated endlessly but tracked fact-by-fact
 - optional read-aloud with the microphone (skippable, never required)
 
+### The 🔊 buttons
+
+Every challenge card has a speaker button, and it always works the same way:
+tap it as many times as you like, and it repeats. Tapping it again while it's
+talking cuts the old word off and starts over, so an impatient tap is never
+swallowed. The button flashes when it registers your tap even if the device's
+voice takes a moment to start.
+
+One button behaves differently **on purpose**: on the "read this word" card
+the speaker says *"Read the word, then tap the picture that matches"* and
+never says the word itself. That card is the one that measures whether a
+child can decode a word without hearing it first — saying it aloud would
+turn it back into a listening test. The word is spoken as soon as the child
+gets it right.
+
 An adaptive scheduler (Leitner-style boxes 0–5 per item **per skill**) brings
 back what a child misses, rests what's mastered (with occasional review), and
 leans toward the skill each child is weaker at. Difficulty tiers ramp up on

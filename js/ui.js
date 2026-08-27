@@ -473,6 +473,9 @@ var UI = (function () {
   }
   function closeOverlay() {
     GameAudio.stopListen();
+    // Drop any half-spoken word. If the speech engine wedged mid-sentence,
+    // leaving it queued would silence the 🔊 buttons on the next card.
+    GameAudio.stop();
     $("overlay").classList.remove("open");
     if (Game.running) Controls.setEnabled(true);
   }

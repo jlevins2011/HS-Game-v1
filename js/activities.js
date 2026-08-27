@@ -42,6 +42,14 @@ var Activities = (function () {
       GameAudio.warm();
       var text = typeof getText === "function" ? getText() : getText;
       GameAudio.say(text, rate);
+      // Visible confirmation that the tap landed. Without it, a child who
+      // hears nothing for a beat decides the button is dead and stops using
+      // it — which is exactly how a slow voice engine gets reported as
+      // "the speaker buttons don't work".
+      el.classList.remove("speaking");
+      void el.offsetWidth;
+      el.classList.add("speaking");
+      setTimeout(function () { el.classList.remove("speaking"); }, 650);
     });
   }
 
@@ -269,10 +277,13 @@ var Activities = (function () {
       "<div class='ch-title'>" + (intro || "🏛️ What does it mean?") + "</div>" +
       "<div class='read-word small-word'>" + esc(ch.front) + "</div>" +
       "<div class='ch-sub'>What does this " + esc(ch.language) + " word mean?</div>" +
+      // Safe to say aloud: it reads the foreign word, not the English answer.
+      "<button type='button' class='speak-btn small' id='ch-speak'>🔊 Say the word</button>" +
       "<div class='word-grid' id='ch-grid'></div>"
     );
     fillChoices("ch-grid", ch.choices, ch.back, onDone, { small: true,
       onRight: function () { GameAudio.say(ch.front + " means " + ch.back); } });
+    bindSpeak("ch-speak", ch.front);
   }
 
   /* ------- verseblank: complete the verse ------- */

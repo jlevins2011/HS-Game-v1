@@ -735,6 +735,16 @@ window.addEventListener("load", function () {
   Game.init();
   UI.showHome();
   window.addEventListener("visibilitychange", function () {
-    if (document.hidden) { Stats.tickPlaytime(); Store.saveNow(); }
+    if (document.hidden) {
+      Stats.tickPlaytime();
+      Store.saveNow();
+      // iPadOS suspends the speech engine when the app leaves the screen and
+      // often brings it back stuck at speaking:true. Clearing it on both
+      // edges keeps the 🔊 buttons alive after a trip to the home screen.
+      GameAudio.stop();
+    } else {
+      GameAudio.stop();
+      GameAudio.warm();
+    }
   });
 });

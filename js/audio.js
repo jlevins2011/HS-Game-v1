@@ -65,10 +65,13 @@ var GameAudio = (function () {
   // real utterance.
   if (window.speechSynthesis) {
     setInterval(function () {
+      // Heal a stuck engine in the background so the child's next tap is
+      // answered immediately instead of being spent on the recovery.
+      if (engineWedged()) clearQueue();
       if (isSafariLike()) return;
       if (speechSynthesis.speaking || speechSynthesis.pending) return;
       try { speechSynthesis.pause(); speechSynthesis.resume(); } catch (e) {}
-    }, 10000);
+    }, 4000);
   }
 
   // iPad Safari reports as Macintosh + touch.
@@ -79,6 +82,40 @@ var GameAudio = (function () {
     return /Safari/i.test(ua) && !/Chrome|CriOS|Chromium|Android/i.test(ua);
   }
 
+  /* The speech engine on iPad can wedge: after the app is backgrounded, a
+     word is interrupted, or the child taps twice quickly, speechSynthesis
+     reports speaking:true forever and every later request queues behind it
+     in silence — so the 🔊 buttons appear to stop working for the rest of
+     the session. We track our own state and unwedge it when that happens. */
+  var pendingAt = 0;        // when we last asked for speech
+  var pendingStarted = false;
+
+  function kick(utter) {
+    try { speechSynthesis.resume(); } catch (e) {}
+    try { speechSynthesis.speak(utter); } catch (e) {}
+  }
+
+  function engineWedged() {
+    if (!window.speechSynthesis) return false;
+    if (!pendingAt) return false;
+    var waited = Date.now() - pendingAt;
+    // asked for speech but it never started
+    if (!pendingStarted && waited > 600) return true;
+    // claims to still be talking far longer than any of our phrases
+    if (speechSynthesis.speaking && waited > 12000) return true;
+    return false;
+  }
+
+  function clearQueue() {
+    try { speechSynthesis.cancel(); } catch (e) {}
+    pendingAt = 0;
+    pendingStarted = false;
+  }
+
+  // Each say() owns a turn. A newer request supersedes an older one, so a
+  // stale watchdog can never talk over the word the child just asked for.
+  var seq = 0;
+
   function say(text, rate) {
     warm();
     if (text == null || text === "") return;
@@ -86,34 +123,75 @@ var GameAudio = (function () {
     if (!window.speechSynthesis) return;
     pickVoice();
 
-    var started = false;
-    var u = makeUtterance(text, rate);
-    u.onstart = function () { started = true; };
+    // Recover from a wedged engine before asking for anything new. This is
+    // what keeps a child's second tap from being swallowed forever.
+    if (engineWedged()) clearQueue();
 
-    function kick(utter) {
-      try { speechSynthesis.resume(); } catch (e) {}
-      try { speechSynthesis.speak(utter); } catch (e) {}
+    var myTurn = ++seq;
+    var started = false, finished = false, retried = false;
+
+    function make() {
+      var u = makeUtterance(text, rate);
+      u.onstart = function () {
+        started = true;
+        if (myTurn === seq) pendingStarted = true;
+      };
+      u.onend = u.onerror = function () {
+        finished = true;
+        if (myTurn === seq) { pendingAt = 0; pendingStarted = false; }
+      };
+      return u;
     }
 
-    // Safari: cancel() often kills the follow-up speak() even inside the
-    // same tap, so just queue. Chrome: cancel()+speak() in one tick is
-    // frequently silent, so cancel then retry once a moment later.
-    if (isSafariLike()) {
-      kick(u);
-      return;
+    /* Watchdog. If this utterance never reports onstart, something ate it.
+       Stage 1 fires quickly when the engine says it is idle. If the engine
+       instead claims to be speaking while our word never started, that is
+       the classic iPad wedge — but it could also be a slow engine with a
+       late onstart, so we give it one more breath before cutting in. We
+       retry exactly once, and only while this turn is still the current one. */
+    function watchdog(stage) {
+      if (started || finished || retried) return;
+      if (myTurn !== seq || !window.speechSynthesis) return;
+      var busyNow = false;
+      try { busyNow = speechSynthesis.speaking; } catch (e) {}
+      if (busyNow && stage === 1) { setTimeout(function () { watchdog(2); }, 700); return; }
+      retried = true;
+      clearQueue();
+      pendingAt = Date.now();
+      pendingStarted = false;
+      kick(make());
     }
 
-    try {
-      if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
-    } catch (e) {}
+    function fire() {
+      if (myTurn !== seq) return;
+      pendingAt = Date.now();
+      pendingStarted = false;
+      kick(make());
+      setTimeout(function () { watchdog(1); }, 380);
+    }
 
-    kick(u);
-    setTimeout(function () {
-      if (started || speechSynthesis.speaking) return;
-      u = makeUtterance(text, rate);
-      u.onstart = function () { started = true; };
-      kick(u);
-    }, 70);
+    var busy = false;
+    try { busy = speechSynthesis.speaking || speechSynthesis.pending; } catch (e) {}
+
+    if (busy) {
+      // Something is already talking (usually the card reading itself out
+      // when it opened). Cut it off so the child's tap is answered NOW
+      // rather than queueing behind it — a two-second wait reads to a kid
+      // as "the button is broken".
+      clearQueue();
+      // Safari drops an utterance spoken in the same tick as cancel(); one
+      // tick later is fine, and the engine is already unlocked by then.
+      if (isSafariLike()) { setTimeout(fire, 60); return; }
+    }
+
+    fire();
+  }
+
+  // called when a challenge card closes so a stale word can't block the next one
+  function stop() {
+    if (!window.speechSynthesis) return;
+    seq++;                     // abandon any watchdog still waiting
+    clearQueue();
   }
 
   function sayLetter(ch) { say(ch === "a" ? "ay" : ch, 0.9); }
@@ -227,7 +305,7 @@ var GameAudio = (function () {
   };
 
   return {
-    say: say, sayLetter: sayLetter, sfx: sfx, unlock: ac, warm: warm,
+    say: say, sayLetter: sayLetter, stop: stop, sfx: sfx, unlock: ac, warm: warm,
     canListen: canListen, listenFor: listenFor, stopListen: stopListen,
     matchesWord: matchesWord,
     get lastSaid() { return lastSaid; }
