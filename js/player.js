@@ -43,6 +43,9 @@ var Player = (function () {
   }
 
   function tryAxis(nx, nz) {
+    // built walls stop you outright rather than letting you step in and
+    // then shoving you back out (that read as "walking through" walls)
+    if (window.Build && Build.blocksAt(nx, nz, pos.y, RADIUS, HEIGHT)) return false;
     var g = groundAt(nx, nz, pos.y);
     if (g === -Infinity) return true;                   // open sky: allowed, we'll fall
     if (g - pos.y > STEP) return false;                 // cliff face / wall
@@ -90,7 +93,8 @@ var Player = (function () {
         pos.z = c.z + (oz / d) * min;
       }
     }
-    if (window.Build) Build.collideCircle(pos, RADIUS, HEIGHT);
+    // resolve twice so inside corners can't squeeze you through
+    if (window.Build) { Build.collideCircle(pos, RADIUS, HEIGHT); Build.collideCircle(pos, RADIUS, HEIGHT); }
 
     // grotto walls
     if (Terrain.inGrotto) {
@@ -135,6 +139,11 @@ var Player = (function () {
     camera.rotation.set(0, 0, 0);
     camera.rotateY(yaw);
     camera.rotateX(pitch);
+    // Bake the transform now. Raycasts (build ghost, interaction prompt) run
+    // BEFORE the renderer draws, and setFromCamera reads matrixWorld — without
+    // this they aim with the previous frame's camera, which on a slower device
+    // makes the build ghost lag behind where the child is actually pointing.
+    camera.updateMatrixWorld();
   }
 
   /* ray helpers for interaction / placement */

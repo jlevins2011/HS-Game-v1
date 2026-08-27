@@ -640,3 +640,14 @@ button.inv-tool { cursor: pointer; }
   padding: 10px 4px 6px; cursor: pointer; text-align: center;
 }
 .satchel-item:active { background: #f6ecd6; }
+
+/* version stamp (home screen bottom-left, and in the pause menu) */
+#home-version {
+  position: absolute; bottom: 16px; left: 16px; z-index: 3;
+  font-size: 12px; font-weight: 700; letter-spacing: .4px;
+  color: rgba(45, 74, 102, .65);
+  background: rgba(255,255,255,.35);
+  padding: 6px 10px; border-radius: 999px;
+  pointer-events: none;
+}
+.version-line { font-size: 12px; opacity: .75; margin-top: -4px; }

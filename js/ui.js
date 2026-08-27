@@ -16,6 +16,10 @@ var UI = (function () {
     "Lantern Master", "Horizon Keeper", "Twilight Warden", "Radiant Pathfinder",
     "Voyager of the Veil", "Master of the Isles", "Luminary", "KEEPER OF LIGHT"];
 
+  function versionLabel() {
+    return "v" + CONFIG.BRAND.version + (CONFIG.BRAND.built ? " · " + CONFIG.BRAND.built : "");
+  }
+
   function rankFor(level) {
     if (level <= RANKS.length) return RANKS[level - 1];
     return "Keeper of Light " + (level - RANKS.length + 1);
@@ -754,6 +758,7 @@ var UI = (function () {
   function showPause() {
     var html =
       "<div class='ch-title'>PAUSED</div>" +
+      "<div class='ch-sub version-line'>" + CONFIG.BRAND.name + " " + versionLabel() + "</div>" +
       "<button class='big-btn' id='pm-resume'>▶️ KEEP PLAYING</button>" +
       "<button class='big-btn' id='pm-isles'>🗺️ TRAVEL TO AN ISLE</button>" +
       "<button class='big-btn' id='pm-home'>🏠 SWITCH EXPLORER</button>" +
@@ -829,6 +834,7 @@ var UI = (function () {
     Controls.setEnabled(false);
     $("home-title").textContent = CONFIG.BRAND.icon + " " + CONFIG.BRAND.name;
     $("home-tag").textContent = CONFIG.BRAND.tagline;
+    $("home-version").textContent = versionLabel();
     renderPlayerButtons();
   }
   function hideHome() {
@@ -949,6 +955,7 @@ var UI = (function () {
     showInventory: showInventory, toggleInventory: toggleInventory,
     showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
     rankFor: rankFor, xpNeeded: xpNeeded, nextCraftInfo: nextCraftInfo, showWorkshop: showWorkshop,
+    versionLabel: versionLabel,
     openOverlay: openOverlay, closeOverlay: closeOverlay, holdToOpen: holdToOpen
   };
 })();

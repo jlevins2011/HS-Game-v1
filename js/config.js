@@ -12,6 +12,10 @@ var CONFIG = {
     name: "Lumen Isles",
     tagline: "Explore. Build. Shine.",
     icon: "✨",
+    // Bump this on every build you send to a device. It shows on the home
+    // screen and in the pause menu so you always know what's running.
+    version: "2.0.1",
+    built: "2026-08-27",
     currencyName: "sparks",
     currencyIcon: "✨",
     playerTitle: "Keeper"           // what the child is called in-world

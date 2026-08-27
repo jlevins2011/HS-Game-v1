@@ -222,6 +222,15 @@ var NPCs = (function () {
           }
         }
       }
+      // never stand inside the player — a friend's face filling the screen
+      // is disorienting, so they politely step back
+      var sepX = g.position.x - playerPos.x, sepZ = g.position.z - playerPos.z;
+      var sep = Math.hypot(sepX, sepZ);
+      if (sep < 1.1) {
+        var push = (1.1 - sep) * Math.min(1, dt * 6);
+        if (sep < 0.001) { sepX = 1; sepZ = 0; sep = 1; }
+        positionOnGround(n, g.position.x + (sepX / sep) * push, g.position.z + (sepZ / sep) * push);
+      }
       g.rotation.y += (n.faceYaw - g.rotation.y) * Math.min(1, dt * 6);
       g.position.y += Math.sin(t * 2 + i * 2) * 0.0015;
     });

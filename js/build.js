@@ -64,22 +64,32 @@ var Build = (function () {
       g.box(CELL, 0.1, 0.16, WOOD_D, o(0, 0.22, CELL / 2 - 0.08), 0.1);
       g.box(CELL, 0.1, 0.16, WOOD_D, o(0, 0.22, -CELL / 2 + 0.08), 0.1);
     } else if (t === "wall" || t === "window" || t === "door") {
+      // Boards butt flush against each other (no gaps to see daylight through)
+      // and each is thicker than the collider is deep, so you never see the
+      // world through a wall you are standing against.
       var boards = 5;
+      var bw = CELL / boards;
+      var TH = 0.26;
       for (var i = 0; i < boards; i++) {
-        var bx = -CELL / 2 + (i + 0.5) * (CELL / boards);
-        var isOpen = (t === "door" && i > 0 && i < 4) || (t === "window" && i > 0 && i < 4);
+        var bx = -CELL / 2 + (i + 0.5) * bw;
+        var isOpen = i > 0 && i < 4 && (t === "door" || t === "window");
         if (!isOpen) {
-          g.box(CELL / boards - 0.04, WALL_H, 0.16, i % 2 ? WOOD : WOOD_L, o(bx, 0, 0), 0.12);
+          g.box(bw, WALL_H, TH, i % 2 ? WOOD : WOOD_L, o(bx, 0, 0), 0.12);
         } else if (t === "window") {
-          g.box(CELL / boards - 0.04, 0.7, 0.16, i % 2 ? WOOD : WOOD_L, o(bx, 0, 0), 0.12);
-          g.box(CELL / boards - 0.04, 0.5, 0.16, i % 2 ? WOOD : WOOD_L, o(bx, WALL_H - 0.5, 0), 0.12);
-          g.box(CELL / boards - 0.02, WALL_H - 1.2, 0.06, GLASSC, o(bx, 0.7, 0), 0.05);
+          g.box(bw, 0.7, TH, i % 2 ? WOOD : WOOD_L, o(bx, 0, 0), 0.12);
+          g.box(bw, 0.5, TH, i % 2 ? WOOD : WOOD_L, o(bx, WALL_H - 0.5, 0), 0.12);
+          g.box(bw, WALL_H - 1.2, 0.08, GLASSC, o(bx, 0.7, 0), 0.05);
         } else {
-          g.box(CELL / boards - 0.04, WALL_H - 1.95, 0.16, i % 2 ? WOOD : WOOD_L, o(bx, 1.95, 0), 0.12);
+          g.box(bw, WALL_H - 1.95, TH, i % 2 ? WOOD : WOOD_L, o(bx, 1.95, 0), 0.12);
         }
       }
-      g.box(CELL, 0.14, 0.2, WOOD_D, o(0, WALL_H - 0.14, 0), 0.1);
-      g.box(CELL, 0.14, 0.2, WOOD_D, o(0, 0, 0), 0.1);
+      // top and bottom rails tie the boards together
+      g.box(CELL, 0.16, TH + 0.06, WOOD_D, o(0, WALL_H - 0.16, 0), 0.1);
+      g.box(CELL, 0.14, TH + 0.06, WOOD_D, o(0, 0, 0), 0.1);
+      if (t === "door") {
+        // a lintel over the opening so the doorway reads as a doorway
+        g.box(CELL * 0.62, 0.18, TH + 0.04, WOOD_D, o(0, 1.95, 0), 0.1);
+      }
     } else if (t === "roof") {
       // gable prism with overhang
       var w = CELL + 0.5, d = CELL + 0.5, h = 1.15;
@@ -167,7 +177,9 @@ var Build = (function () {
       solids.push({ x0: rw.x0, y0: p.y, z0: rw.z0, x1: rw.x1, y1: p.y + WALL_H, z1: rw.z1 });
       tops.push({ x0: rw.x0, z0: rw.z0, x1: rw.x1, z1: rw.z1, top: p.y + WALL_H });
     } else if (p.t === "door") {
-      var rl = rectFor(-0.7, 0, 0.6, 0.3), rr = rectFor(0.7, 0, 0.6, 0.3);
+      // posts match the two solid boards, so the gap you can SEE is the gap
+      // you can walk through (1.2m — roomy for a 0.68m-wide explorer)
+      var rl = rectFor(-0.8, 0, 0.4, 0.3), rr = rectFor(0.8, 0, 0.4, 0.3);
       solids.push({ x0: rl.x0, y0: p.y, z0: rl.z0, x1: rl.x1, y1: p.y + WALL_H, z1: rl.z1 });
       solids.push({ x0: rr.x0, y0: p.y, z0: rr.z0, x1: rr.x1, y1: p.y + WALL_H, z1: rr.z1 });
       var rt = rectFor(0, 0, CELL, 0.3);
@@ -207,12 +219,44 @@ var Build = (function () {
     return best;
   }
 
+  // Would a body of this size at (x,z,feetY) be inside a solid piece?
+  // Used to STOP movement before it happens, so walls feel like walls
+  // instead of shoving you out after you have already stepped inside.
+  function blocksAt(x, z, feetY, radius, height) {
+    for (var i = 0; i < pieces.length; i++) {
+      var solids = pieces[i].solids;
+      for (var j = 0; j < solids.length; j++) {
+        var b = solids[j];
+        if (feetY + height * 0.9 < b.y0 || feetY + 0.35 > b.y1) continue;
+        var cx = Math.max(b.x0, Math.min(x, b.x1));
+        var cz = Math.max(b.z0, Math.min(z, b.z1));
+        if (Math.hypot(x - cx, z - cz) < radius) return true;
+      }
+    }
+    return false;
+  }
+
+  // does this pending piece overlap the player right now?
+  function wouldTrapPlayer(pose) {
+    var probe = { t: pose.t, x: pose.x, y: pose.y, z: pose.z, r: pose.r, ry: pose.ry };
+    computePhysics(probe);
+    var p = Player.position;
+    for (var j = 0; j < probe.solids.length; j++) {
+      var b = probe.solids[j];
+      if (p.y + 1.5 < b.y0 || p.y + 0.35 > b.y1) continue;
+      var cx = Math.max(b.x0, Math.min(p.x, b.x1));
+      var cz = Math.max(b.z0, Math.min(p.z, b.z1));
+      if (Math.hypot(p.x - cx, p.z - cz) < 0.45) return true;
+    }
+    return false;
+  }
+
   function collideCircle(pos, radius, height) {
     for (var i = 0; i < pieces.length; i++) {
       var solids = pieces[i].solids;
       for (var j = 0; j < solids.length; j++) {
         var b = solids[j];
-        if (pos.y + height * 0.9 < b.y0 || pos.y + 0.3 > b.y1) continue;
+        if (pos.y + height * 0.9 < b.y0 || pos.y + 0.35 > b.y1) continue;
         // closest point on box to circle center
         var cx = Math.max(b.x0, Math.min(pos.x, b.x1));
         var cz = Math.max(b.z0, Math.min(pos.z, b.z1));
@@ -252,33 +296,61 @@ var Build = (function () {
     return list;
   }
 
+  // Prefer the HIGHEST surface at (or just below) where the child is pointing.
+  // Aiming at a floor's edge then puts the wall on the floor rather than on the
+  // dirt underneath it, so a room's walls all line up at the same height.
   function nearestSupport(x, z, aimY) {
     var list = supportsAt(x, z);
     if (!list.length) return null;
-    var best = list[0];
-    for (var i = 1; i < list.length; i++) {
-      if (Math.abs(list[i] - aimY) < Math.abs(best - aimY)) best = list[i];
+    var best = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] <= aimY + 0.5 && (best === null || list[i] > best)) best = list[i];
     }
-    return best;
+    if (best !== null) return best;
+    var lo = list[0];
+    for (var j = 1; j < list.length; j++) if (list[j] < lo) lo = list[j];
+    return lo;
   }
 
   /* ---------------- ghost ---------------- */
-  function currentPose() {
-    // aim point: terrain or 8m ahead in the air (for bridges over sky)
-    var hit = Player.terrainHit(16);
-    var aim;
-    if (hit) aim = hit.point;
-    else {
-      var rc = Player.ray();
-      aim = rc.ray.origin.clone().add(rc.ray.direction.clone().multiplyScalar(9));
+  // Where is the player looking? Tests the terrain AND everything already
+  // built, taking whichever is nearer — otherwise the ray sails straight
+  // through your own floor and you end up editing the tile behind it.
+  function aimPoint() {
+    var rc = Player.ray();
+    rc.far = 16;
+    var best = null;
+    if (Terrain.groundMesh) {
+      var th = rc.intersectObject(Terrain.groundMesh, false);
+      if (th.length) best = th[0];
     }
+    var meshes = [];
+    for (var i = 0; i < pieces.length; i++) if (pieces[i].mesh) meshes.push(pieces[i].mesh);
+    if (meshes.length) {
+      var ph = rc.intersectObjects(meshes, false);
+      if (ph.length && (!best || ph[0].distance < best.distance)) best = ph[0];
+    }
+    if (best) return best.point;
+    // nothing under the cursor (open sky) — project a point ahead
+    return rc.ray.origin.clone().add(rc.ray.direction.clone().multiplyScalar(9));
+  }
+
+  function currentPose() {
+    var aim = aimPoint();
     var cell = snapCell(aim.x, aim.z);
     var def = pieceDef(activePiece);
     var pose = { t: activePiece, x: cell.x, z: cell.z, r: rotIdx, valid: true, reason: "" };
 
     if (activePiece === "wall" || activePiece === "window" || activePiece === "door" || activePiece === "fence") {
-      // snap to the cell edge the rotation faces
-      var off = [[0, -CELL / 2], [-CELL / 2, 0], [0, CELL / 2], [CELL / 2, 0]][rotIdx % 4];
+      // Point at the side of the tile you want the wall on and it goes there.
+      // ⟳ steps to the next side, so every one of the four is reachable.
+      var lx = aim.x - cell.x, lz = aim.z - cell.z;
+      var edge = Math.abs(lx) > Math.abs(lz)
+        ? (lx < 0 ? 1 : 3)          // west : east
+        : (lz < 0 ? 0 : 2);         // north : south
+      var r = (edge + rotIdx) % 4;
+      pose.r = r;
+      var off = [[0, -CELL / 2], [-CELL / 2, 0], [0, CELL / 2], [CELL / 2, 0]][r];
       pose.x = cell.x + off[0];
       pose.z = cell.z + off[1];
       var sup = nearestSupport(cell.x, cell.z, aim.y);
@@ -305,10 +377,9 @@ var Build = (function () {
       if (sup4 === null) { pose.valid = false; pose.reason = "No ground here"; }
       else pose.y = sup4;
       if (activePiece === "roof") {
-        // prefer wall tops: highest support within 3m of aim
+        // a roof always caps whatever is on the tile — point anywhere at it
         var list = supportsAt(pose.x, pose.z);
-        var high = Math.max.apply(null, list);
-        if (high - pose.y > 0.5) pose.y = high;
+        if (list.length) pose.y = Math.max.apply(null, list);
       }
     }
 
@@ -326,6 +397,9 @@ var Build = (function () {
       } else if (tooFar(pose)) {
         pose.valid = false;
         pose.reason = "Too far away";
+      } else if (wouldTrapPlayer(pose)) {
+        pose.valid = false;
+        pose.reason = "Step back — you're standing there!";
       }
     }
     return pose;
@@ -498,7 +572,8 @@ var Build = (function () {
     load: load, updateGhost: updateGhost, place: place, removeAim: removeAim,
     enterMode: enterMode, exitMode: exitMode, setPiece: setPiece, rotate: rotate,
     toggleRemove: toggleRemove,
-    floorTopAt: floorTopAt, collideCircle: collideCircle,
+    floorTopAt: floorTopAt, collideCircle: collideCircle, blocksAt: blocksAt,
+    removePiece: removePiece,
     campSpot: campSpot, bridgePiecesNear: bridgePiecesNear,
     get mode() { return mode; },
     get removeMode() { return removeMode; },

@@ -10,6 +10,10 @@ practice (reading, spelling, Latin, Bible, math) appears naturally inside
 the play as floating **wonderstones**, **curio chests**, restoration
 rites, crafting challenges, and **Starfall** events they *want* to answer.
 
+The running build's version is shown on the home screen (bottom-left) and in
+the pause menu, so you always know what's on the iPad. Bump
+`CONFIG.BRAND.version` / `.built` in `js/config.js` for each build you send.
+
 Built for iPad touch (works in any modern browser, mouse + WASD too).
 No installs, no accounts, no ads, no chat. Progress saves on-device;
 a one-tap backup file protects it. *(Working title — branding is centralized
@@ -47,8 +51,9 @@ satchel, 🛠️ opens build mode.
   sky to reach the isle's floating satellite islets
 - **🛠️ Building**: compose real structures from floors, walls, doorways,
   windows, roofs, stairs, fences, planters, lantern posts, and a camp
-  tent (your respawn point) — pieces snap helpfully, and taking one back
-  refunds its materials
+  tent (your respawn point). Point at the side of a tile and the wall goes
+  there — all four sides — with ⟳ to step around; roofs cap whatever is on
+  the tile; taking a piece back refunds its materials
 - **🔮 Wonderstones** and **🧰 curio chests** hold challenges with spark + loot rewards
 - **Elder Alder** gives SUPER CHALLENGES that earn legendary tools — the
   **Rootbreaker Drill** (opens the sealed crystal grotto beneath the isle),
