@@ -24,7 +24,12 @@ var Store = (function () {
       settings: {
         pin: null,             // optional 4-digit parent PIN
         emails: [],            // weekly report recipients
-        reportDays: CONFIG.REPORT.everyDays
+        reportDays: CONFIG.REPORT.everyDays,
+        // Minimum minutes between learning challenges. Parent-only: it lives
+        // in family settings (behind the long-press + PIN), never in a
+        // child's save, so a child cannot change it or reset it away.
+        paceMinutes: CONFIG.LEARN.defaultPaceMinutes,   // family default
+        paceByChild: {}                                 // profileId -> minutes (overrides the default)
       }
     };
   }
@@ -93,6 +98,32 @@ var Store = (function () {
     try { localStorage.removeItem(SAVE_PREFIX + pid); } catch (e) {}
   }
 
+  /* -------- question pacing (parent-controlled) -------- */
+  var PACE_MAX = 120;
+  function paceMinutes(pid) {
+    var s = family.settings || {};
+    var per = s.paceByChild || {};
+    var v = (pid && per[pid] !== undefined && per[pid] !== null) ? per[pid] : s.paceMinutes;
+    v = Number(v);
+    if (!isFinite(v) || v < 0) v = 0;
+    return Math.min(PACE_MAX, Math.round(v));
+  }
+  // pid null -> set the family default; "all" clears every override too
+  function setPaceMinutes(pid, minutes, applyToAll) {
+    var v = Number(minutes);
+    if (!isFinite(v) || v < 0) v = 0;
+    v = Math.min(PACE_MAX, Math.round(v));
+    if (!family.settings.paceByChild) family.settings.paceByChild = {};
+    if (applyToAll || !pid) {
+      family.settings.paceMinutes = v;
+      if (applyToAll) family.settings.paceByChild = {};
+    } else {
+      family.settings.paceByChild[pid] = v;
+    }
+    saveFamily();
+    return v;
+  }
+
   function assignmentsFor(pid) {
     if (!family.assignments[pid]) family.assignments[pid] = [];
     return family.assignments[pid];
@@ -150,6 +181,7 @@ var Store = (function () {
         playMs: 0,
         daysPlayed: [],
         challenges: {},            // "subject/skill" -> { tries, clean, mistakes }
+        lastChallengeAt: 0,        // drives the parent-set minimum gap between questions
         lifetime: { challenges: 0, clean: 0, sparks: 0, gathered: 0, built: 0, quests: 0, harvested: 0 }
       }
     };
@@ -280,6 +312,7 @@ var Store = (function () {
     family: family, saveFamily: saveFamily,
     addProfile: addProfile, removeProfile: removeProfile,
     assignmentsFor: assignmentsFor, defaultAssignments: defaultAssignments,
+    paceMinutes: paceMinutes, setPaceMinutes: setPaceMinutes,
     allCurricula: allCurricula, curriculum: curriculum,
     addCustomCurriculum: addCustomCurriculum, removeCustomCurriculum: removeCustomCurriculum,
     load: load, save: save, saveNow: saveNow, reset: reset, peek: peek, peekSave: peekSave,

@@ -422,7 +422,28 @@ button { font-family: inherit; }
 .world-req { font-size: 12px; font-weight: 600; color: #8a7a5e; }
 
 /* parent dashboard */
-.parent-scroll { max-height: 54vh; overflow-y: auto; text-align: left; }
+.parent-scroll {
+  max-height: 60vh; overflow-y: auto; text-align: left;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+/* Everything in the Parents area fires on click, not pointerdown, so a drag
+   that starts on a button scrolls instead of pressing it. touch-action keeps
+   iOS from waiting on a double-tap-zoom before delivering that click. */
+#overlay-card button, #overlay-card select, #overlay-card input { touch-action: manipulation; }
+.pr-quiet { display: block; font-size: 12px; font-weight: 600; color: #8a7a5e; line-height: 1.6; margin-top: 4px; }
+.ghost-btn.armed, .pr-email-del.armed {
+  background: #c0392b; color: #fff; border-color: #92291d;
+}
+
+/* question pacing */
+.pace-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.pace-btn {
+  min-width: 52px; font-size: 14px; font-weight: 800; padding: 11px 12px;
+  background: #efe4c8; color: #8a7a5e; border: none; border-radius: 12px; cursor: pointer;
+}
+.pace-btn.active { background: #3a4a68; color: #fff; }
+.pace-now { font-size: 13px; font-weight: 800; color: #3a4a68; margin: 6px 0 8px; }
+.pace-line { color: #6b7a94; font-weight: 700; margin-top: -4px; }
 .pr-section {
   font-size: 14px; font-weight: 500; line-height: 1.7; color: #3a2e18;
   background: #fff; border-radius: 12px; padding: 12px; margin: 8px 0;
@@ -444,7 +465,7 @@ button { font-family: inherit; }
 
 .pr-tabs { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin: 6px 0 10px; }
 .pr-tab {
-  font-size: 13px; font-weight: 800; padding: 10px 12px;
+  font-size: 12px; font-weight: 800; padding: 9px 10px; white-space: nowrap;
   background: #efe4c8; color: #8a7a5e; border: none; border-radius: 12px; cursor: pointer;
 }
 .pr-tab.active { background: #3a4a68; color: #fff; }

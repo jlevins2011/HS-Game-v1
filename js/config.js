@@ -14,7 +14,7 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.0.3",
+    version: "2.1.0",
     built: "2026-08-27",
     currencyName: "sparks",
     currencyIcon: "✨",
@@ -56,7 +56,11 @@ var CONFIG = {
     boxWeights: [4, 4, 2, 1, 0.5, 0.25],
     unseenWeight: 3,                // weight of never-tried items
     strugglePickChance: 0.45,       // chance a challenge deliberately targets a weak item
-    choicesEasy: 3, choicesHard: 4  // answer-option counts
+    choicesEasy: 3, choicesHard: 4, // answer-option counts
+    // Minimum minutes between challenges, out of the box. Parents change
+    // this per child in the Parents area (Assignments tab); children can't.
+    defaultPaceMinutes: 0,          // 0 = no enforced gap
+    paceChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30]
   },
 
   /* -------- world / creature pacing -------- */

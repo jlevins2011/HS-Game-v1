@@ -52,6 +52,8 @@ var Reports = (function () {
     lines.push(profile.emoji + " " + profile.name.toUpperCase());
     lines.push("- Time played this week: " + fmtMinutes(s.playMs) + " over " + s.daysPlayed.length + " day(s)");
     lines.push("- Game level: " + p.level + " (" + UI.rankFor(p.level) + "), " + p.sparks + " sparks");
+    var pace = Store.paceMinutes(profile.id);
+    lines.push("- Question pacing: " + (pace ? "at least " + pace + " min between challenges" : "off"));
     lines.push("");
     lines.push("PRACTICE THIS WEEK");
     var keys = Object.keys(s.challenges);

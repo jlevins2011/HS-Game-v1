@@ -320,13 +320,16 @@ var Game = (function () {
     var go = document.getElementById("sp-go");
     if (go) go.addEventListener("pointerdown", function () {
       UI.showChallenge("super", function (r1) {
+        if (r1.paced) return;   // the pacing message already explained itself
         if (!r1.correct || r1.skipped) { UI.toast("The spring stays quiet... try again soon!"); return; }
+        // The Rite is one ceremony in two parts — once it has begun, the
+        // parent's question gap doesn't cut it in half.
         UI.showChallenge("super", function (r2) {
           if (!r2.correct || r2.skipped) { UI.toast("So close! The spring flickered. Try again soon!"); return; }
           var inv = Store.data.player.inventory;
           Object.keys(cost).forEach(function (k) { inv[k] -= cost[k]; });
           restoreZone(o, zone);
-        }, "🕯️ Rite of Light (2 of 2)");
+        }, "🕯️ Rite of Light (2 of 2)", { ignorePace: true });
       }, "🕯️ Rite of Light (1 of 2)");
     });
   }
@@ -512,6 +515,9 @@ var Game = (function () {
     if (!running || fallingStar) return;
     if (document.getElementById("overlay").classList.contains("open")) return;
     if (Date.now() - lastEdu < CONFIG.LEARN.starfallMinutes * 60 * 1000) return;
+    // Never send a star down inside the parent's quiet gap — the child would
+    // chase it only to be told to come back later.
+    if (Learning.paceWaitMs() > 0) return;
     lastEdu = Date.now();
     // a glowing star tumbles from the sky ahead of the player
     var g = new Geo.Builder();

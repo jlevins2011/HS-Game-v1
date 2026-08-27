@@ -339,13 +339,41 @@ var UI = (function () {
 
   /* ---------------- challenge wrapper ---------------- */
   // context: "node" | "chest" | "craft" | "starfall" | "super"
-  function showChallenge(context, onDone, intro) {
+  // A parent can set a minimum gap between questions in the Parents area.
+  // It is enforced here, at the single door every challenge comes through.
+  var PACE_MSG = {
+    node:     "🔮 The wonderstone is still gathering light — try again in ",
+    chest:    "🧰 This chest is sealed for now — try again in ",
+    super:    "🧓 Elder Alder: “Rest your mind, Keeper. Come back in ",
+    starfall: "🌠 The star fizzles out — the sky rests for "
+  };
+  function paceBlocked(context, onDone, opts) {
+    if (opts && opts.ignorePace) return false;   // a chain already past the gate
+    var wait = Learning.paceWaitMs();
+    if (wait <= 0) return false;
+    // Crafting must never stall: let the craft through, just without a question.
+    if (context === "craft") {
+      onDone({ correct: true, mistakes: 0, skipped: false, nolesson: true, paced: true });
+      return true;
+    }
+    var text = Learning.paceWaitText(wait);
+    var msg = PACE_MSG[context]
+      ? PACE_MSG[context] + text + (context === "super" ? ".”" : ".")
+      : "⏳ Next question in " + text + " — go explore!";
+    toast(msg, 3400);
+    onDone({ correct: false, mistakes: 0, skipped: true, paced: true });
+    return true;
+  }
+
+  function showChallenge(context, onDone, intro, opts) {
+    if (paceBlocked(context, onDone, opts)) return;
     var ch = Learning.getChallenge(context);
     if (!ch) {
       // no curricula assigned — keep the game playable
       onDone({ correct: true, mistakes: 0, skipped: false, nolesson: true });
       return;
     }
+    Learning.markChallengeShown();
     Activities.present(ch, function (result) {
       if (!result.skipped) Learning.report(ch, result);
       onDone(result);
@@ -759,9 +787,19 @@ var UI = (function () {
 
   /* ---------------- pause menu / isles ---------------- */
   function showPause() {
+    // If a parent set a minimum gap between questions, say so plainly here
+    // rather than letting the child wonder why chests won't open.
+    var paceLine = "";
+    if (Learning.paceGapMs() > 0) {
+      var wait = Learning.paceWaitMs();
+      paceLine = "<div class='ch-sub pace-line'>⏳ " + (wait > 0
+        ? "Next question in " + Learning.paceWaitText(wait)
+        : "Ready for the next question") + "</div>";
+    }
     var html =
       "<div class='ch-title'>PAUSED</div>" +
       "<div class='ch-sub version-line'>" + CONFIG.BRAND.name + " " + versionLabel() + "</div>" +
+      paceLine +
       "<button class='big-btn' id='pm-resume'>▶️ KEEP PLAYING</button>" +
       "<button class='big-btn' id='pm-isles'>🗺️ TRAVEL TO AN ISLE</button>" +
       "<button class='big-btn' id='pm-home'>🏠 SWITCH EXPLORER</button>" +
@@ -957,6 +995,7 @@ var UI = (function () {
     showChallenge: showChallenge, showDialogue: showDialogue,
     showInventory: showInventory, toggleInventory: toggleInventory,
     showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
+    showNewExplorer: showNewExplorer,
     rankFor: rankFor, xpNeeded: xpNeeded, nextCraftInfo: nextCraftInfo, showWorkshop: showWorkshop,
     versionLabel: versionLabel,
     openOverlay: openOverlay, closeOverlay: closeOverlay, holdToOpen: holdToOpen

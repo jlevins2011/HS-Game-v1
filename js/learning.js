@@ -623,6 +623,43 @@ var Learning = (function () {
     return out.slice(0, limit || 10);
   }
 
+  /* ---------------- question pacing ----------------
+     The parent sets a minimum gap between challenges in the Parents area.
+     It is enforced here, from family settings a child can't reach, and the
+     clock is stamped into the child's save so closing the app or reloading
+     the page doesn't hand out a free question. */
+  function paceGapMs() {
+    if (!Store.profile) return 0;
+    return Store.paceMinutes(Store.profile.id) * 60000;
+  }
+
+  // milliseconds still to wait before another challenge may be shown (0 = go)
+  function paceWaitMs() {
+    var gap = paceGapMs();
+    if (gap <= 0) return 0;
+    var last = (Store.data && Store.data.stats && Store.data.stats.lastChallengeAt) || 0;
+    if (!last) return 0;
+    var left = gap - (Date.now() - last);
+    if (left <= 0) return 0;
+    // a clock pushed into the future (device time changed) shouldn't lock
+    // a child out for hours
+    return Math.min(left, gap);
+  }
+
+  function markChallengeShown() {
+    if (!Store.data || !Store.data.stats) return;
+    Store.data.stats.lastChallengeAt = Date.now();
+    Store.saveNow();
+  }
+
+  // "4 minutes" / "1 minute" / "less than a minute"
+  function paceWaitText(ms) {
+    var mins = Math.ceil((ms || 0) / 60000);
+    if (mins <= 0) return "a moment";
+    if (mins === 1) return "about a minute";
+    return "about " + mins + " minutes";
+  }
+
   function prettyKey(k) {
     if (k.slice(0, 2) === "v:") return k.slice(2);
     if (k.slice(0, 2) === "q:") return "“" + k.slice(2, 40) + "…”";
@@ -634,6 +671,8 @@ var Learning = (function () {
     getChallenge: getChallenge, report: report,
     activeAssignments: activeAssignments, focusList: focusList,
     needsReview: needsReview, masteredRecently: masteredRecently, prettyKey: prettyKey,
-    skillNeed: skillNeed
+    skillNeed: skillNeed,
+    paceGapMs: paceGapMs, paceWaitMs: paceWaitMs, paceWaitText: paceWaitText,
+    markChallengeShown: markChallengeShown
   };
 })();

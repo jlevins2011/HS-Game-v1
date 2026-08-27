@@ -90,6 +90,16 @@ set a 4-digit PIN there.
 - **Assignments** — per child, set each lesson set's weight 0–5 (how often it
   appears in play). Bible weighting is simply the weight on Bible sets.
   Multiple sets per child and one set for multiple children both work.
+  This tab also holds **⏳ Question pacing** — the shortest time that may
+  pass between one challenge and the next (Off, or 1–30 minutes), set per
+  child, with a one-tap "use this for every explorer". Wonderstones, curio
+  chests, Starfalls and Elder Alder all wait it out and tell the child in
+  world language why ("the wonderstone is still gathering light — try again
+  in about 5 minutes"). Crafting is never blocked; it just proceeds without
+  a question, so the game can't stall. The setting lives in parent settings,
+  not in a child's save: it can't be reached from any child-facing screen,
+  and reloading the game or resetting progress does not clear it or hand out
+  a free question.
 - **Reports & Settings** — weekly family email reports, on-screen report
   preview, **backup export/restore** (a JSON file — protects against cleared
   browser data and moves progress to a new device), parent PIN.
