@@ -964,7 +964,7 @@ var UI = (function () {
 
   function init() {
     document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-    document.addEventListener("pointerdown", function () { GameAudio.warm(); }, true);
+    document.addEventListener("pointerdown", function () { GameAudio.unlock(); }, true);
     $("btn-pause").addEventListener("pointerdown", function (e) { e.stopPropagation(); showPause(); });
     $("btn-bag").addEventListener("pointerdown", function (e) { e.stopPropagation(); showInventory(); });
     $("btn-mode").addEventListener("pointerdown", function (e) { e.stopPropagation(); Game.toggleMode(); });

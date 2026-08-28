@@ -130,7 +130,9 @@ Every challenge card has a speaker button, and it always works the same way:
 tap it as many times as you like, and it repeats. Tapping it again while it's
 talking cuts the old word off and starts over, so an impatient tap is never
 swallowed. The button flashes when it registers your tap even if the device's
-voice takes a moment to start.
+voice takes a moment to start. On iPad the voice is started in the same tap
+(Safari drops a delayed speak, which is what made the button seem broken
+when a card was already reading itself out).
 
 One button behaves differently **on purpose**: on the "read this word" card
 the speaker says *"Read the word, then tap the picture that matches"* and
