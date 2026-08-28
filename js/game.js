@@ -748,6 +748,7 @@ window.addEventListener("load", function () {
       // often brings it back stuck at speaking:true. Clearing it on both
       // edges keeps the 🔊 buttons alive after a trip to the home screen.
       GameAudio.stop();
+      GameAudio.invalidateUnlock();
     } else {
       GameAudio.stop();
       GameAudio.warm();

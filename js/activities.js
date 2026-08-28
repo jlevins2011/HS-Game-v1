@@ -37,11 +37,8 @@ var Activities = (function () {
   function bindSpeak(id, getText, rate) {
     var el = $(id);
     if (!el) return;
-    el.addEventListener("pointerdown", function (e) {
-      e.stopPropagation();
-      GameAudio.warm();
-      var text = typeof getText === "function" ? getText() : getText;
-      GameAudio.say(text, rate);
+    function textOf() { return typeof getText === "function" ? getText() : getText; }
+    function pulse() {
       // Visible confirmation that the tap landed. Without it, a child who
       // hears nothing for a beat decides the button is dead and stops using
       // it — which is exactly how a slow voice engine gets reported as
@@ -50,6 +47,20 @@ var Activities = (function () {
       void el.offsetWidth;
       el.classList.add("speaking");
       setTimeout(function () { el.classList.remove("speaking"); }, 650);
+    }
+    el.addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      GameAudio.unlock();
+      GameAudio.say(textOf(), rate);
+      pulse();
+    });
+    // iOS Safari often treats click, not pointerdown, as the trusted
+    // speech-synthesis gesture. If pointerdown's speak was dropped,
+    // this retry is still inside the same tap.
+    el.addEventListener("click", function (e) {
+      e.stopPropagation();
+      GameAudio.unlock();
+      GameAudio.say(textOf(), rate, { fallback: true });
     });
   }
 

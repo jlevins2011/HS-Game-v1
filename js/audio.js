@@ -3,15 +3,29 @@
    AUDIO — text-to-speech (the "teacher voice") and small
    oscillator sound effects. No audio files needed.
 
-   The TTS handling is battle-tested on iPad Safari (speak()
-   must stay inside the tap) and Chrome (cancel()+speak() in
-   the same tick is often silent). Every 🔊 button routes
-   through GameAudio.say().
+   iPad Safari (this game's real device) silently drops
+   speechSynthesis.speak() when it is not inside the same tap.
+   A previous recovery path deferred speak() 60ms after cancel()
+   so desktop Safari would hear it — and that is exactly when
+   iPad goes mute, which is why the 🔊 button "sometimes" worked
+   (engine idle → speak in the tap) and sometimes didn't (card
+   already talking → cancel + delayed speak, dropped).
+
+   Rules:
+   - iPad: speak() always stays in the tap. After cancel(), a
+     silent dummy utterance takes the "eaten" slot so the real
+     word survives the same tick.
+   - Chrome: cancel()+speak() in one tick is often silent, so a
+     watchdog may retry from a timer (Chrome allows that).
+   - Never cancel a slow-starting iPad voice from a background
+     timer — onstart can take well over 600ms there.
+   Every 🔊 button routes through GameAudio.say().
    ============================================================ */
 var GameAudio = (function () {
   var ctx = null;
   var lastSaid = "";
   var listenHandle = null;
+  var speechUnlocked = false;
 
   function ac() {
     if (!ctx) {
@@ -22,10 +36,57 @@ var GameAudio = (function () {
     return ctx;
   }
 
+  // iPhone / iPad / iPadOS-desktop-UA (Macintosh + touch).
+  function isIOSTouch() {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPod|iPad/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+
+  // iPad Safari reports as Macintosh + touch.
+  function isSafariLike() {
+    var ua = navigator.userAgent || "";
+    if (isIOSTouch()) return true;
+    return /Safari/i.test(ua) && !/Chrome|CriOS|Chromium|Android/i.test(ua);
+  }
+
+  function makeSilentUtterance() {
+    var u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    u.rate = 10;
+    u.lang = "en-US";
+    return u;
+  }
+
+  // iOS only allows later programmatic speak() after one utterance has
+  // been requested inside a user gesture (even a silent one).
+  function primeUnlock() {
+    if (!window.speechSynthesis || speechUnlocked) return;
+    try {
+      speechSynthesis.speak(makeSilentUtterance());
+      speechUnlocked = true;
+    } catch (e) {}
+  }
+
   function warm() {
     ac();
     if (!window.speechSynthesis) return;
     try { speechSynthesis.resume(); } catch (e) {}
+  }
+
+  // Call from a real tap (joystick, 🔊, profile). A dummy utterance
+  // inside the gesture is what lets later speak() calls work on iPad.
+  function unlock() {
+    ac();
+    warm();
+    primeUnlock();
+  }
+
+  // After the app is backgrounded iOS forgets the unlock. Next tap
+  // must prime again. Safe to call from visibilitychange.
+  function invalidateUnlock() {
+    speechUnlocked = false;
   }
 
   /* ---------- speech ---------- */
@@ -60,38 +121,23 @@ var GameAudio = (function () {
     return u;
   }
 
-  // Chrome goes mute if speechSynthesis sits idle; a pause/resume keeps
-  // the engine awake. Skip on Safari — pause() there can drop the next
-  // real utterance.
-  if (window.speechSynthesis) {
-    setInterval(function () {
-      // Heal a stuck engine in the background so the child's next tap is
-      // answered immediately instead of being spent on the recovery.
-      if (engineWedged()) clearQueue();
-      if (isSafariLike()) return;
-      if (speechSynthesis.speaking || speechSynthesis.pending) return;
-      try { speechSynthesis.pause(); speechSynthesis.resume(); } catch (e) {}
-    }, 4000);
-  }
-
-  // iPad Safari reports as Macintosh + touch.
-  function isSafariLike() {
-    var ua = navigator.userAgent || "";
-    if (/iPhone|iPod|iPad/i.test(ua)) return true;
-    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
-    return /Safari/i.test(ua) && !/Chrome|CriOS|Chromium|Android/i.test(ua);
-  }
-
   /* The speech engine on iPad can wedge: after the app is backgrounded, a
      word is interrupted, or the child taps twice quickly, speechSynthesis
      reports speaking:true forever and every later request queues behind it
      in silence — so the 🔊 buttons appear to stop working for the rest of
-     the session. We track our own state and unwedge it when that happens. */
+     the session. We track our own state and unwedge it on the next tap. */
   var pendingAt = 0;        // when we last asked for speech
   var pendingStarted = false;
+  var lastAskText = "";
 
-  function kick(utter) {
+  function kick(utter, prime) {
     try { speechSynthesis.resume(); } catch (e) {}
+    // After cancel(), WebKit often eats the next speak() in the same
+    // tick. A silent dummy takes that bullet so the real word plays.
+    // Must stay synchronous — a timer is not a user gesture on iPad.
+    if (prime) {
+      try { speechSynthesis.speak(makeSilentUtterance()); } catch (e) {}
+    }
     try { speechSynthesis.speak(utter); } catch (e) {}
   }
 
@@ -99,10 +145,10 @@ var GameAudio = (function () {
     if (!window.speechSynthesis) return false;
     if (!pendingAt) return false;
     var waited = Date.now() - pendingAt;
-    // asked for speech but it never started
-    if (!pendingStarted && waited > 600) return true;
-    // claims to still be talking far longer than any of our phrases
-    if (speechSynthesis.speaking && waited > 12000) return true;
+    // iPad voices are slow to report onstart; 600ms was cancelling
+    // real speech that was about to begin.
+    if (!pendingStarted && waited > 2000) return true;
+    if (speechSynthesis.speaking && waited > 15000) return true;
     return false;
   }
 
@@ -112,20 +158,44 @@ var GameAudio = (function () {
     pendingStarted = false;
   }
 
+  // Chrome goes mute if speechSynthesis sits idle; a pause/resume keeps
+  // the engine awake. Skip on Safari — pause() there can drop the next
+  // real utterance. On iPad, never cancel a voice that is merely slow.
+  if (window.speechSynthesis) {
+    setInterval(function () {
+      if (isIOSTouch()) {
+        if (pendingAt && Date.now() - pendingAt > 15000) clearQueue();
+        return;
+      }
+      if (engineWedged()) clearQueue();
+      if (isSafariLike()) return;
+      if (speechSynthesis.speaking || speechSynthesis.pending) return;
+      try { speechSynthesis.pause(); speechSynthesis.resume(); } catch (e) {}
+    }, 4000);
+  }
+
   // Each say() owns a turn. A newer request supersedes an older one, so a
   // stale watchdog can never talk over the word the child just asked for.
   var seq = 0;
 
-  function say(text, rate) {
+  function say(text, rate, opts) {
+    opts = opts || {};
     warm();
     if (text == null || text === "") return;
     lastSaid = String(text);
     if (!window.speechSynthesis) return;
     pickVoice();
 
-    // Recover from a wedged engine before asking for anything new. This is
-    // what keeps a child's second tap from being swallowed forever.
-    if (engineWedged()) clearQueue();
+    // click fires after pointerdown on the same tap. If pointerdown
+    // already got this phrase talking, don't cut it off and restart.
+    // If pointerdown's speak was dropped (iOS did not treat it as a
+    // gesture), pendingStarted is still false and we retry here.
+    if (opts.fallback) {
+      if (pendingStarted && lastAskText === lastSaid) return;
+      var talking = false;
+      try { talking = speechSynthesis.speaking; } catch (e) {}
+      if (talking && lastAskText === lastSaid) return;
+    }
 
     var myTurn = ++seq;
     var started = false, finished = false, retried = false;
@@ -143,13 +213,10 @@ var GameAudio = (function () {
       return u;
     }
 
-    /* Watchdog. If this utterance never reports onstart, something ate it.
-       Stage 1 fires quickly when the engine says it is idle. If the engine
-       instead claims to be speaking while our word never started, that is
-       the classic iPad wedge — but it could also be a slow engine with a
-       late onstart, so we give it one more breath before cutting in. We
-       retry exactly once, and only while this turn is still the current one. */
+    /* Watchdog for Chrome / desktop. Never used on iPad: speak() from a
+       timer is dropped there, and cancel() would kill the original word. */
     function watchdog(stage) {
+      if (isIOSTouch()) return;
       if (started || finished || retried) return;
       if (myTurn !== seq || !window.speechSynthesis) return;
       var busyNow = false;
@@ -159,19 +226,22 @@ var GameAudio = (function () {
       clearQueue();
       pendingAt = Date.now();
       pendingStarted = false;
-      kick(make());
+      lastAskText = lastSaid;
+      kick(make(), false);
     }
 
-    function fire() {
+    function fire(prime) {
       if (myTurn !== seq) return;
       pendingAt = Date.now();
       pendingStarted = false;
-      kick(make());
-      setTimeout(function () { watchdog(1); }, 380);
+      lastAskText = lastSaid;
+      kick(make(), prime);
+      if (!isIOSTouch()) setTimeout(function () { watchdog(1); }, 380);
     }
 
     var busy = false;
     try { busy = speechSynthesis.speaking || speechSynthesis.pending; } catch (e) {}
+    if (!busy && engineWedged()) busy = true;
 
     if (busy) {
       // Something is already talking (usually the card reading itself out
@@ -179,12 +249,16 @@ var GameAudio = (function () {
       // rather than queueing behind it — a two-second wait reads to a kid
       // as "the button is broken".
       clearQueue();
-      // Safari drops an utterance spoken in the same tick as cancel(); one
-      // tick later is fine, and the engine is already unlocked by then.
-      if (isSafariLike()) { setTimeout(fire, 60); return; }
+      if (isIOSTouch()) {
+        fire(true);
+        return;
+      }
+      // Desktop Safari drops an utterance spoken in the same tick as
+      // cancel(); one tick later is fine. iPad cannot use this path.
+      if (isSafariLike()) { setTimeout(function () { fire(false); }, 60); return; }
     }
 
-    fire();
+    fire(false);
   }
 
   // called when a challenge card closes so a stale word can't block the next one
@@ -305,7 +379,8 @@ var GameAudio = (function () {
   };
 
   return {
-    say: say, sayLetter: sayLetter, stop: stop, sfx: sfx, unlock: ac, warm: warm,
+    say: say, sayLetter: sayLetter, stop: stop, sfx: sfx, unlock: unlock, warm: warm,
+    invalidateUnlock: invalidateUnlock,
     canListen: canListen, listenFor: listenFor, stopListen: stopListen,
     matchesWord: matchesWord,
     get lastSaid() { return lastSaid; }
