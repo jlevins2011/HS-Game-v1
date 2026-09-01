@@ -438,6 +438,30 @@ button { font-family: inherit; }
   background: #c0392b; color: #fff; border-color: #92291d;
 }
 
+/* voice check */
+.vc-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.vc-letter {
+  width: 44px; height: 44px; font-size: 17px; font-weight: 800;
+  background: #efe4c8; color: #3a4a68; border: none; border-radius: 10px; cursor: pointer;
+}
+.vc-letter.active { background: #3a4a68; color: #fff; }
+.vc-alts:empty { display: none; }
+.vc-alts {
+  background: #fdf6e8; border-radius: 12px; padding: 10px; margin: 8px 0;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.vc-alts-title { width: 100%; font-size: 13px; font-weight: 800; color: #3a4a68; }
+.vc-alt {
+  font-size: 14px; font-weight: 700; padding: 10px 14px;
+  background: #fff; color: #3a2e18; border: 2px solid #d9c9a5; border-radius: 10px; cursor: pointer;
+}
+.vc-alt.active { background: #5fae6f; border-color: #4a8f58; color: #fff; }
+.vc-words { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.vc-word {
+  font-size: 13px; font-weight: 700; padding: 9px 12px;
+  background: #efe4c8; color: #3a4a68; border: none; border-radius: 10px; cursor: pointer;
+}
+
 /* question pacing */
 .pace-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
 .pace-btn {

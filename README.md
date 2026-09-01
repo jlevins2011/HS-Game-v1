@@ -134,6 +134,13 @@ voice takes a moment to start. On iPad the voice is started in the same tap
 (Safari drops a delayed speak, which is what made the button seem broken
 when a card was already reading itself out).
 
+**If a letter sounds wrong**, open Parents → Reports & Settings → **🗣️ Voice check**.
+It names the voice your device is actually using, plays every letter, and lets you pick
+a different spelling for any that come out wrong — speech engines genuinely disagree,
+and a bare "a" is read as the article ("uh") while the obvious fix "ay" comes out as
+"eye" on some voices. Your picks are saved on that device only, since the right spelling
+depends on which voice is installed there.
+
 One button behaves differently **on purpose**: on the "read this word" card
 the speaker says *"Read the word, then tap the picture that matches"* and
 never says the word itself. That card is the one that measures whether a

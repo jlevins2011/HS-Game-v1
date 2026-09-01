@@ -9,6 +9,9 @@ var path = require("path");
 var assert = require("assert");
 
 var AUDIO_JS = fs.readFileSync(path.join(__dirname, "..", "js", "audio.js"), "utf8");
+// audio.js reads CONFIG.SPEECH for the letter-name table, and the browser
+// loads config.js first — so load it here too and test the real table.
+var CONFIG_JS = fs.readFileSync(path.join(__dirname, "..", "js", "config.js"), "utf8");
 
 function loadAudio(opts) {
   opts = opts || {};
@@ -73,6 +76,7 @@ function loadAudio(opts) {
   sandbox.window.speechSynthesis = synth;
   sandbox.window.SpeechSynthesisUtterance = sandbox.SpeechSynthesisUtterance;
   vm.createContext(sandbox);
+  vm.runInContext(CONFIG_JS, sandbox);
   vm.runInContext(AUDIO_JS, sandbox);
   return { GameAudio: sandbox.GameAudio, synth: synth, log: log, sandbox: sandbox };
 }

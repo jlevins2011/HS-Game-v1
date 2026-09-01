@@ -14,7 +14,7 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.1.1",
+    version: "2.1.2",
     built: "2026-08-28",
     currencyName: "sparks",
     currencyIcon: "✨",
@@ -61,6 +61,44 @@ var CONFIG = {
     // this per child in the Parents area (Assignments tab); children can't.
     defaultPaceMinutes: 0,          // 0 = no enforced gap
     paceChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30]
+  },
+
+  /* -------- speech: how the teacher voice says things --------
+     Single letters are the weak spot in every browser speech engine. A bare
+     "a" is read as the article ("uh"), and the obvious respelling "ay" comes
+     out as "eye" on some voices. So every letter gets an explicit respelling
+     using a word the engine cannot mistake.
+
+     Voices genuinely disagree, and we cannot hear what a given iPad does, so
+     `letterAlts` holds other spellings a parent can pick from in
+     Parents → Reports & Settings → Voice check. Their choice is saved on that
+     device only (a different iPad may have a different voice). -------- */
+  SPEECH: {
+    letterRate: 0.85,
+    letters: {
+      a: "ay",  b: "bee", c: "see", d: "dee", e: "ee",   f: "eff",
+      g: "jee", h: "aitch", i: "eye", j: "jay", k: "kay", l: "ell",
+      m: "em",  n: "en",  o: "oh",  p: "pee", q: "cue",  r: "ar",
+      s: "ess", t: "tee", u: "you", v: "vee", w: "double you",
+      x: "ex",  y: "why", z: "zee"
+    },
+    // ambiguous ones only — the letters where engines disagree
+    letterAlts: {
+      a: ["ay", "eigh", "ayy", "A"],
+      e: ["ee", "eee", "E"],
+      g: ["jee", "gee", "G"],
+      h: ["aitch", "haitch", "H"],
+      i: ["eye", "i", "I"],
+      r: ["ar", "are", "R"],
+      u: ["you", "yoo", "U"],
+      w: ["double you", "double-u", "W"],
+      y: ["why", "wye", "Y"],
+      z: ["zee", "zed", "Z"]
+    },
+    // spoken in the Voice check screen so a parent can hear what their device
+    // does with the words most likely to come out wrong
+    checkWords: ["read", "live", "bow", "wind", "tear", "lead", "close",
+                 "minute", "aqua", "terra", "Bethlehem", "Nazareth"]
   },
 
   /* -------- world / creature pacing -------- */

@@ -599,6 +599,8 @@ var Parent = (function () {
       (hasPin ? "<button type='button' class='ghost-btn danger inline-btn' id='pr-pin-clear'>Remove PIN</button>" : "") +
       "</div>" +
 
+      renderVoiceCheck() +
+
       "<div class='pr-section'><b>ℹ️ About the built-in content</b><br>" +
       "Bible memory verses are quoted from the King James Version (public domain) and every Bible item " +
       "shows its Scripture reference so you can audit it. The Latin set is original introductory material " +
@@ -606,7 +608,88 @@ var Parent = (function () {
       "how often questions may interrupt play with ⏳ Question pacing.</div>";
   }
 
+  /* ---------------- voice check ----------------
+     Speech engines differ from device to device and we cannot hear what a
+     given iPad does. This screen names the voice in use and lets a parent
+     hear every letter, then pick a different spelling for any that come out
+     wrong. The choice is saved on this device only. */
+  var voiceLetter = null;      // the letter currently being auditioned
+  var ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
+
+  function renderVoiceCheck() {
+    var info = GameAudio.voiceInfo();
+    var who = !info.supported
+      ? "This browser has no speech engine — the 🔊 buttons will be silent."
+      : (info.name
+          ? "Using <b>" + esc(info.name) + "</b>" + (info.lang ? " (" + esc(info.lang) + ")" : "")
+          : "Using this device's default voice") +
+        (info.available ? " · " + info.available + " voices available" : "");
+
+    var tiles = ALPHABET.map(function (ch) {
+      return "<button type='button' class='vc-letter' data-vcl='" + ch + "'>" + ch.toUpperCase() + "</button>";
+    }).join("");
+
+    var words = (CONFIG.SPEECH.checkWords || []).map(function (w) {
+      return "<button type='button' class='vc-word' data-vcw='" + esc(w) + "'>" + esc(w) + "</button>";
+    }).join("");
+
+    return "<div class='pr-section'><b>🗣️ Voice check</b><br>" +
+      "<span class='pr-quiet'>" + who + "</span>" +
+      "<i>Tap a letter to hear it. If one sounds wrong, pick a different spelling — " +
+      "saved on this device only, because the right spelling depends on which voice is installed here.</i>" +
+      "<div class='vc-grid'>" + tiles + "</div>" +
+      "<div class='vc-alts' id='vc-alts'></div>" +
+      "<div class='pr-quiet' style='margin-top:10px'>These words trip up speech engines. Tap to hear how yours does:</div>" +
+      "<div class='vc-words'>" + words + "</div>" +
+      "<button type='button' class='ghost-btn danger inline-btn' id='vc-reset'>Reset letter pronunciations</button>" +
+      "</div>";
+  }
+
+  // Rebuilt in place — a full re-render here would wipe anything typed into
+  // the email or PIN fields further up this tab.
+  function paintVoiceAlts() {
+    var box = $("vc-alts");
+    if (!box) return;
+    each("[data-vcl]", function (b) {
+      b.classList.toggle("active", b.getAttribute("data-vcl") === voiceLetter);
+    });
+    if (!voiceLetter) { box.innerHTML = ""; return; }
+    var current = GameAudio.letterSpelling(voiceLetter);
+    var alts = GameAudio.letterAlternates(voiceLetter);
+    box.innerHTML =
+      "<div class='vc-alts-title'>“" + esc(voiceLetter.toUpperCase()) + "” sounds like:</div>" +
+      alts.map(function (a) {
+        return "<button type='button' class='vc-alt" + (a === current ? " active" : "") +
+          "' data-vca='" + esc(a) + "'>" + esc(a) + "</button>";
+      }).join("");
+    tapEach("[data-vca]", function (b) {
+      var pick = b.getAttribute("data-vca");
+      GameAudio.setLetterSpelling(voiceLetter, pick);
+      GameAudio.sayLetter(voiceLetter);
+      paintVoiceAlts();
+    });
+  }
+
+  function wireVoiceCheck() {
+    tapEach("[data-vcl]", function (b) {
+      voiceLetter = b.getAttribute("data-vcl");
+      GameAudio.sayLetter(voiceLetter);
+      paintVoiceAlts();
+    });
+    tapEach("[data-vcw]", function (b) {
+      GameAudio.say(b.getAttribute("data-vcw"));
+    });
+    var rst = $("vc-reset");
+    if (rst) armDouble(rst, "Tap again to RESET", function () {
+      GameAudio.resetLetterSpellings();
+      paintVoiceAlts();
+      UI.toast("Letter pronunciations back to default.");
+    });
+    paintVoiceAlts();
+  }
+
   function wireReports() {
+    wireVoiceCheck();
     tapEach(".pr-email-del", function (btn) {
       Reports.removeEmail(btn.getAttribute("data-email"));
       render();

@@ -111,6 +111,20 @@ var GameAudio = (function () {
     speechSynthesis.onvoiceschanged = pickVoice;
   }
 
+  // what the Voice check screen reports, so a parent can tell us (and
+  // themselves) which voice they are actually tuning against
+  function voiceInfo() {
+    if (!window.speechSynthesis) return { name: "", lang: "", available: 0, supported: false };
+    var vs = [];
+    try { vs = speechSynthesis.getVoices() || []; } catch (e) {}
+    return {
+      name: (voice && voice.name) || "",
+      lang: (voice && voice.lang) || "",
+      available: vs.length,
+      supported: true
+    };
+  }
+
   function makeUtterance(text, rate) {
     var u = new SpeechSynthesisUtterance(String(text));
     if (voice) u.voice = voice;
@@ -178,12 +192,23 @@ var GameAudio = (function () {
   // stale watchdog can never talk over the word the child just asked for.
   var seq = 0;
 
+  /* opts.fallback: the click that follows pointerdown on the same tap — a
+     retry for when iOS ignored the first speak(). See bindSpeak.
+     opts.queue:    line up behind whatever is already talking instead of
+     cutting it off. Right for letter tiles — a child spelling B-A-T quickly
+     must hear all three — and wrong for a 🔊 button, where an impatient
+     second tap means "say it again, now". */
   function say(text, rate, opts) {
     opts = opts || {};
     warm();
     if (text == null || text === "") return;
+    // A lone letter is a letter, wherever it came from — including the
+    // single-letter sight words ("a", "I") in the reading curriculum, which
+    // an engine would otherwise read as the article or the pronoun.
+    if (isLetter(text)) text = letterSpelling(text);
     lastSaid = String(text);
     if (!window.speechSynthesis) return;
+    var queue = !!(opts && opts.queue);
     pickVoice();
 
     // click fires after pointerdown on the same tap. If pointerdown
@@ -221,6 +246,8 @@ var GameAudio = (function () {
       if (myTurn !== seq || !window.speechSynthesis) return;
       var busyNow = false;
       try { busyNow = speechSynthesis.speaking; } catch (e) {}
+      // Queued speech waiting its turn is not a wedge — leave it alone.
+      if (busyNow && queue) return;
       if (busyNow && stage === 1) { setTimeout(function () { watchdog(2); }, 700); return; }
       retried = true;
       clearQueue();
@@ -241,7 +268,13 @@ var GameAudio = (function () {
 
     var busy = false;
     try { busy = speechSynthesis.speaking || speechSynthesis.pending; } catch (e) {}
-    if (!busy && engineWedged()) busy = true;
+    var wedged = engineWedged();
+    if (!busy && wedged) busy = true;
+
+    // Queue mode lines up behind whatever is talking instead of cutting it
+    // off. A genuine wedge is the one exception — nothing is really playing
+    // then, so fall through to the recovery path below.
+    if (busy && queue && !wedged) { fire(false); return; }
 
     if (busy) {
       // Something is already talking (usually the card reading itself out
@@ -268,7 +301,72 @@ var GameAudio = (function () {
     clearQueue();
   }
 
-  function sayLetter(ch) { say(ch === "a" ? "ay" : ch, 0.9); }
+  /* ---------- letter names ----------
+     Speech engines are unreliable with a lone character: "a" collides with
+     the article and comes out "uh", and the obvious fix "ay" is read as "eye"
+     by some voices. Every letter is respelled from CONFIG.SPEECH.letters, and
+     a parent can override any of them for their own device in the Voice check
+     screen. Overrides are device-local on purpose — the right spelling depends
+     on which voice that particular iPad has installed, so it must not travel
+     in a family backup to a device with a different voice. */
+  // CONFIG is loaded before this file in the browser, but audio.js is also
+  // run standalone by tests/audio-tts.test.js, so never assume it is there.
+  function speechCfg() {
+    return (typeof CONFIG !== "undefined" && CONFIG && CONFIG.SPEECH) || {};
+  }
+
+  var VOICE_KEY = "lumen_voice_v1";
+  var overrides = {};
+  try {
+    var rawV = localStorage.getItem(VOICE_KEY);
+    if (rawV) {
+      var pv = JSON.parse(rawV);
+      if (pv && pv.letters) overrides = pv.letters;
+    }
+  } catch (e) { /* corrupted -> defaults */ }
+
+  function saveOverrides() {
+    try { localStorage.setItem(VOICE_KEY, JSON.stringify({ letters: overrides })); } catch (e) {}
+  }
+
+  function isLetter(ch) {
+    return typeof ch === "string" && ch.length === 1 && /[a-z]/i.test(ch);
+  }
+
+  // how this device will pronounce a given letter
+  function letterSpelling(ch) {
+    var k = String(ch).toLowerCase();
+    if (overrides[k]) return overrides[k];
+    var table = speechCfg().letters || {};
+    return table[k] || ch;
+  }
+
+  // "" or the default clears the override
+  function setLetterSpelling(ch, spelling) {
+    var k = String(ch).toLowerCase();
+    var table = speechCfg().letters || {};
+    if (!spelling || spelling === table[k]) delete overrides[k];
+    else overrides[k] = spelling;
+    saveOverrides();
+    return letterSpelling(k);
+  }
+
+  function letterAlternates(ch) {
+    var k = String(ch).toLowerCase();
+    var alts = (speechCfg().letterAlts || {})[k];
+    var out = alts ? alts.slice() : [];
+    var def = (speechCfg().letters || {})[k];
+    if (def && out.indexOf(def) < 0) out.unshift(def);
+    if (!out.length && def) out.push(def);
+    return out;
+  }
+
+  function resetLetterSpellings() { overrides = {}; saveOverrides(); }
+
+  function sayLetter(ch) {
+    var rate = speechCfg().letterRate || 0.85;
+    say(letterSpelling(ch), rate, { queue: true });
+  }
 
   /* ---------- optional: hear the child say a word ---------- */
   function RecCtor() {
@@ -381,6 +479,9 @@ var GameAudio = (function () {
   return {
     say: say, sayLetter: sayLetter, stop: stop, sfx: sfx, unlock: unlock, warm: warm,
     invalidateUnlock: invalidateUnlock,
+    voiceInfo: voiceInfo, letterSpelling: letterSpelling,
+    setLetterSpelling: setLetterSpelling, letterAlternates: letterAlternates,
+    resetLetterSpellings: resetLetterSpellings,
     canListen: canListen, listenFor: listenFor, stopListen: stopListen,
     matchesWord: matchesWord,
     get lastSaid() { return lastSaid; }
