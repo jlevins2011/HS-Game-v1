@@ -33,7 +33,7 @@ const pw = require('playwright-core');
   const btns=await page.$$('#player-buttons button');
   const nb=await btns[btns.length-1].boundingBox();
   await tap(nb.x+nb.width/2,nb.y+nb.height/2); await page.waitForTimeout(300);
-  await page.fill('#ne-name','Speller'); await tapSel('#ne-go'); await page.waitForTimeout(2800);
+  await page.fill('#ne-name','Speller'); await tapSel('#ne-go'); await page.waitForTimeout(350); await tapSel('#ho-skip'); await page.waitForTimeout(2800);
 
   // open a real spelling challenge through the real pipeline
   await page.evaluate(()=>{

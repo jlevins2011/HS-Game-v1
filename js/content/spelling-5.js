@@ -6,7 +6,7 @@
 window.BUILTIN_CURRICULA = window.BUILTIN_CURRICULA || [];
 
 BUILTIN_CURRICULA.push({
-  id: "spelling5", name: "Spelling · Grade 5", subject: "spelling", grade: "5",
+  id: "spelling-5", name: "Spelling · Grade 5", subject: "spelling", grade: "5",
   icon: "🖋️",
   desc: "Often-misspelled words, silent letters, doubled letters, and champion-level stumpers.",
   tiers: [

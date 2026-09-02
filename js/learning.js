@@ -55,7 +55,7 @@ var Learning = (function () {
   function activeAssignments() {
     if (!Store.profile) return [];
     return Store.assignmentsFor(Store.profile.id).filter(function (a) {
-      return !!Store.curriculum(a.cid) && a.weight > 0;
+      return a.enabled !== false && !!Store.curriculum(a.cid) && a.weight > 0;
     });
   }
 
@@ -82,25 +82,37 @@ var Learning = (function () {
   function itemsOf(cur, tierIdx) {
     var tier = tiersOf(cur)[tierIdx] || {};
     var out = [];
+    // `say` is an optional pronunciation respelling on any item — the voice
+    // reads it in place of the written form (homographs, Latin, names).
     if (cur.subject === "reading") {
       (tier.words || []).forEach(function (w) {
-        out.push({ key: w.word.toLowerCase(), word: w.word, emoji: w.emoji || null, meaning: w.meaning || null });
+        if (typeof w === "string") w = { word: w };
+        if (!w || !w.word) return;
+        out.push({ key: w.word.toLowerCase(), word: w.word, emoji: w.emoji || null,
+                   meaning: w.meaning || null, say: w.say || null });
       });
     } else if (cur.subject === "spelling") {
       (tier.words || []).forEach(function (w) {
-        var word = typeof w === "string" ? w : w.word;
-        out.push({ key: word.toLowerCase(), word: word });
+        var word = typeof w === "string" ? w : (w && w.word);
+        if (!word) return;
+        out.push({ key: word.toLowerCase(), word: word, say: (w && w.say) || null });
       });
     } else if (cur.subject === "vocab") {
+      // pairs may be ["aqua", "water"] or { front, back, say }
       (tier.pairs || []).forEach(function (p) {
-        out.push({ key: p[0].toLowerCase(), front: p[0], back: p[1] });
+        var front = Array.isArray(p) ? p[0] : (p && p.front);
+        var back = Array.isArray(p) ? p[1] : (p && p.back);
+        if (!front || !back) return;
+        out.push({ key: front.toLowerCase(), front: front, back: back, say: (!Array.isArray(p) && p.say) || null });
       });
     } else if (cur.subject === "bible" || cur.subject === "quiz") {
       (tier.verses || []).forEach(function (v) {
-        out.push({ key: "v:" + v.ref, kind: "verse", ref: v.ref, text: v.text });
+        if (!v || !v.ref || !v.text) return;
+        out.push({ key: "v:" + v.ref, kind: "verse", ref: v.ref, text: v.text, say: v.say || null });
       });
       (tier.facts || []).forEach(function (f) {
-        out.push({ key: "q:" + f.q.slice(0, 60), kind: "fact", q: f.q, a: f.a, choices: f.choices, ref: f.ref });
+        if (!f || !f.q) return;
+        out.push({ key: "q:" + f.q.slice(0, 60), kind: "fact", q: f.q, a: f.a, choices: f.choices, ref: f.ref, say: f.say || null });
       });
     }
     return out;
@@ -229,7 +241,7 @@ var Learning = (function () {
       var pics = shuffled([{ word: target.word, emoji: target.emoji }].concat(
         decoys.map(function (d) { return { word: d.word, emoji: d.emoji }; })));
       return Object.assign(base(cur, tierIdx, "read", target.key), {
-        kind: "read", word: target.word, answer: target.emoji, pictures: pics
+        kind: "read", word: target.word, say: target.say, answer: target.emoji, pictures: pics
       });
     }
 
@@ -240,7 +252,7 @@ var Learning = (function () {
         var tgt = chooseItem(cur.id, withEmoji, "meaning");
         var dec = sample(items, n - 1, function (x) { return x.key === tgt.key; });
         return Object.assign(base(cur, tierIdx, "meaning", tgt.key), {
-          kind: "meaning", word: tgt.word, emoji: tgt.emoji,
+          kind: "meaning", word: tgt.word, say: tgt.say, emoji: tgt.emoji,
           choices: shuffled([tgt.word].concat(dec.map(function (d) { return d.word; })))
         });
       }
@@ -248,7 +260,7 @@ var Learning = (function () {
         var tg = chooseItem(cur.id, withMeaning, "meaning");
         var dc = sample(withMeaning, n - 1, function (x) { return x.key === tg.key; });
         return Object.assign(base(cur, tierIdx, "meaning", tg.key), {
-          kind: "meaningdef", word: tg.word, meaning: tg.meaning,
+          kind: "meaningdef", word: tg.word, say: tg.say, meaning: tg.meaning,
           choices: shuffled([tg.word].concat(dc.map(function (d) { return d.word; })))
         });
       }
@@ -264,7 +276,7 @@ var Learning = (function () {
     var tw = chooseItem(cur.id, items, "hear");
     var dw = sample(items, n - 1, function (x) { return x.key === tw.key; });
     return Object.assign(base(cur, tierIdx, "hear", tw.key), {
-      kind: "hear", word: tw.word, emoji: tw.emoji,
+      kind: "hear", word: tw.word, say: tw.say, emoji: tw.emoji,
       choices: shuffled([tw.word].concat(dw.map(function (d) { return d.word; })))
     });
   }
@@ -274,13 +286,36 @@ var Learning = (function () {
     if (!ss.length) return null;
     var s = ss[Math.floor(Math.random() * ss.length)];
     return Object.assign(base(cur, tierIdx, "sentences", "s:" + s.text.slice(0, 40)), {
-      kind: "sentence", text: s.text, answer: s.answer, choices: shuffled(s.choices.slice())
+      kind: "sentence", text: s.text, say: s.say || null, answer: s.answer, choices: shuffled(s.choices.slice())
     });
   }
 
-  /* ---- realistic misspellings for "spot the correct spelling" ---- */
+  /* ---- realistic misspellings for "spot the correct spelling" ----
+     Short words need their own tricks: a three-letter word has no "ie" to
+     flip and no doubled letter to drop, so the beginner-style errors —
+     the wrong vowel, b/d and p/q flips, a doubled last letter — carry the
+     kindergarten and first-grade sets. */
+  var VOWELS = "aeiou";
+  var LOOKALIKE = { b: "d", d: "b", p: "q", q: "p", m: "n", n: "m", u: "n" };
   function misspell(word) {
     var tries = shuffled([
+      function (w) {   // swap a vowel for another vowel, anywhere
+        var idx = []; for (var i = 0; i < w.length; i++) if (VOWELS.indexOf(w[i]) >= 0) idx.push(i);
+        if (!idx.length) return w;
+        var i2 = idx[Math.floor(Math.random() * idx.length)];
+        var alt = VOWELS.replace(w[i2], "");
+        return w.slice(0, i2) + alt[Math.floor(Math.random() * alt.length)] + w.slice(i2 + 1);
+      },
+      function (w) {   // b/d, p/q, m/n flips — the classic beginner reversals
+        var idx = []; for (var i = 0; i < w.length; i++) if (LOOKALIKE[w[i]]) idx.push(i);
+        if (!idx.length) return w;
+        var i3 = idx[Math.floor(Math.random() * idx.length)];
+        return w.slice(0, i3) + LOOKALIKE[w[i3]] + w.slice(i3 + 1);
+      },
+      function (w) {   // doubled last consonant (bus -> buss)
+        var last = w[w.length - 1];
+        return (VOWELS.indexOf(last) < 0 && w[w.length - 2] !== last) ? w + last : w;
+      },
       function (w) { return w.replace(/ie/, "ei"); },
       function (w) { return w.replace(/ei/, "ie"); },
       function (w) { var m = w.match(/(.)\1/); return m ? w.replace(m[0], m[1]) : w; },
@@ -335,12 +370,12 @@ var Learning = (function () {
     if (skill === "spell") {
       return Object.assign(base(cur, tierIdx, "spell", target.key), {
         kind: "spell", word: target.word.toLowerCase(),
-        speakWord: target.word, tiles: spellTiles(target.word, tierIdx)
+        speakWord: target.say || target.word, tiles: spellTiles(target.word, tierIdx)
       });
     }
     var n = nChoices(tierIdx, boost);
     return Object.assign(base(cur, tierIdx, "spot", target.key), {
-      kind: "spot", word: target.word,
+      kind: "spot", word: target.word, say: target.say,
       choices: shuffled([target.word].concat(makeMisspellings(target.word.toLowerCase(), n - 1)))
     });
   }
@@ -354,7 +389,7 @@ var Learning = (function () {
     var lang = cur.language || "the new language";
     if (skill === "recall") {
       return Object.assign(base(cur, tierIdx, "recall", target.key), {
-        kind: "recall", front: target.front, back: target.back, language: lang,
+        kind: "recall", front: target.front, back: target.back, say: target.say, language: lang,
         choices: shuffled([target.back].concat(decoys.map(function (d) { return d.back; })))
       });
     }
@@ -365,7 +400,7 @@ var Learning = (function () {
       });
     }
     return Object.assign(base(cur, tierIdx, "recognize", target.key), {
-      kind: "recognize", front: target.front, back: target.back, language: lang,
+      kind: "recognize", front: target.front, back: target.back, say: target.say, language: lang,
       choices: shuffled([target.front].concat(decoys.map(function (d) { return d.front; })))
     });
   }
@@ -380,7 +415,7 @@ var Learning = (function () {
     if (skill === "fact" && facts.length) {
       var f = chooseItem(cur.id, facts, "fact");
       return Object.assign(base(cur, tierIdx, "fact", f.key), {
-        kind: "fact", q: f.q, answer: f.a, choices: shuffled(f.choices.slice()), ref: f.ref
+        kind: "fact", q: f.q, say: f.say, answer: f.a, choices: shuffled(f.choices.slice()), ref: f.ref
       });
     }
 
@@ -390,7 +425,7 @@ var Learning = (function () {
 
     if (skill === "versebuild" && words.length <= 14) {
       return Object.assign(base(cur, tierIdx, "versebuild", v.key), {
-        kind: "versebuild", ref: v.ref, text: v.text, words: words, trans: cur.translation || ""
+        kind: "versebuild", ref: v.ref, text: v.text, say: v.say, words: words, trans: cur.translation || ""
       });
     }
 
@@ -414,7 +449,7 @@ var Learning = (function () {
     });
     var choices = shuffled([answerWord].concat(sample(pool, 3)));
     return Object.assign(base(cur, tierIdx, "verse", v.key), {
-      kind: "verseblank", ref: v.ref, text: v.text, trans: cur.translation || "",
+      kind: "verseblank", ref: v.ref, text: v.text, say: v.say, trans: cur.translation || "",
       pre: words.slice(0, bi).join(" "),
       post: words.slice(bi + 1).join(" "),
       answer: answerWord, choices: choices
@@ -569,15 +604,52 @@ var Learning = (function () {
   }
 
   /* ---------------- reporting helpers ---------------- */
-  function focusList() {
-    return activeAssignments().map(function (a) {
+  // Where a child is right now in each assigned set. Works for any child
+  // (pass their save + id) so the Parents area can show every explorer.
+  function focusList(saveData, pid) {
+    var d = saveData || Store.data;
+    var who = pid || (Store.profile && Store.profile.id);
+    if (!who) return [];
+    return Store.assignmentsFor(who).map(function (a) {
       var cur = Store.curriculum(a.cid);
-      var st = tierState(a.cid);
+      if (!cur) return null;
+      var st = (d.learn && d.learn.tiers && d.learn.tiers[a.cid]) || { tier: 0, tierWins: 0 };
       var tiers = tiersOf(cur);
-      var t = tiers[Math.min(st.tier, Math.max(0, tiers.length - 1))] || {};
-      return { name: cur.name, subject: cur.subject, weight: a.weight,
-               tierName: t.name || "", focus: t.focus || "" };
+      var idx = Math.min(st.tier, Math.max(0, tiers.length - 1));
+      var t = tiers[idx] || {};
+      return { cid: a.cid, name: cur.name, subject: cur.subject, weight: a.weight,
+               enabled: a.enabled !== false, tier: idx, tierCount: tiers.length,
+               tierName: t.name || "", focus: t.focus || "", tierWins: st.tierWins || 0 };
+    }).filter(Boolean);
+  }
+
+  /* ---------------- promotions ----------------
+     A child who keeps winning cleanly at the TOP tier of a grade set has
+     outgrown it. We only ever suggest; the parent taps "move up" (or "not
+     yet", which quiets the suggestion until another run of clean wins). */
+  function promotions(saveData, pid) {
+    var d = saveData || Store.data;
+    var who = pid || (Store.profile && Store.profile.id);
+    if (!who || !d || !d.learn) return [];
+    var out = [];
+    Store.assignmentsFor(who).forEach(function (a) {
+      if (a.enabled === false) return;
+      var g = Store.parseGradeSet(a.cid);
+      if (!g) return;
+      var cur = Store.curriculum(a.cid);
+      if (!cur) return;
+      var top = tiersOf(cur).length - 1;
+      var st = d.learn.tiers && d.learn.tiers[a.cid];
+      if (!st || st.tier < top) return;
+      if ((st.tierWins || 0) < CONFIG.LEARN.promoteWins) return;
+      var snoozed = Store.promotionSnoozedAt(who, a.cid);
+      if (snoozed !== null && st.tierWins < snoozed + CONFIG.LEARN.promoteWins) return;
+      var nxt = Store.nextGrade(g.grade);
+      out.push({ cid: a.cid, name: cur.name, subject: g.subject, grade: g.grade,
+                 nextGrade: nxt, nextCid: nxt ? Store.gradeSetId(g.subject, nxt) : null,
+                 tierWins: st.tierWins });
     });
+    return out;
   }
 
   // items needing review: box <= 1 with at least 2 misses, grouped per curriculum
@@ -669,7 +741,7 @@ var Learning = (function () {
 
   return {
     getChallenge: getChallenge, report: report,
-    activeAssignments: activeAssignments, focusList: focusList,
+    activeAssignments: activeAssignments, focusList: focusList, promotions: promotions,
     needsReview: needsReview, masteredRecently: masteredRecently, prettyKey: prettyKey,
     skillNeed: skillNeed,
     paceGapMs: paceGapMs, paceWaitMs: paceWaitMs, paceWaitText: paceWaitText,

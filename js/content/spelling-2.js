@@ -7,7 +7,7 @@
 window.BUILTIN_CURRICULA = window.BUILTIN_CURRICULA || [];
 
 BUILTIN_CURRICULA.push({
-  id: "spelling2", name: "Spelling · Grade 2", subject: "spelling", grade: "2",
+  id: "spelling-2", name: "Spelling · Grade 2", subject: "spelling", grade: "2",
   icon: "✏️",
   desc: "Short-vowel words up through vowel teams and simple two-syllable words.",
   tiers: [

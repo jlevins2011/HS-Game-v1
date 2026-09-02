@@ -124,7 +124,7 @@ const pw = require('playwright-core');
   const btns=await page.$$('#player-buttons button');
   const nb=await btns[btns.length-1].boundingBox();
   await tap(nb.x+nb.width/2,nb.y+nb.height/2); await page.waitForTimeout(300);
-  await page.fill('#ne-name','Voice'); await tapSel('#ne-go'); await page.waitForTimeout(2600);
+  await page.fill('#ne-name','Voice'); await tapSel('#ne-go'); await page.waitForTimeout(350); await tapSel('#ho-skip'); await page.waitForTimeout(2600);
   await page.evaluate(()=>{Game.stop();UI.closeOverlay();UI.showHome();}); await page.waitForTimeout(400);
   await page.evaluate(()=>{ Parent.show(); document.getElementById('overlay').dispatchEvent(new Event('pointerdown')); });
   await page.waitForTimeout(300);

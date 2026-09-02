@@ -19,6 +19,10 @@ var Activities = (function () {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // What the voice says for a challenge's word: an author's `say`
+  // respelling when there is one (homographs, Latin, names), else the word.
+  function spoken(ch) { return ch.say || ch.word; }
+
   function celebrate() {
     var el = $("overlay-card");
     for (var i = 0; i < 14; i++) {
@@ -107,17 +111,19 @@ var Activities = (function () {
       "<div class='word-grid' id='ch-grid'></div>"
     );
     fillChoices("ch-grid", ch.choices, ch.word, onDone, {
-      onWrong: function () { GameAudio.warm(); GameAudio.say(ch.word); }
+      onWrong: function () { GameAudio.warm(); GameAudio.say(spoken(ch)); }
     });
-    bindSpeak("ch-speak", ch.word);
-    GameAudio.say(ch.word);   // same call stack as the opening tap
+    bindSpeak("ch-speak", spoken(ch));
+    GameAudio.say(spoken(ch));   // same call stack as the opening tap
   }
 
   /* ------- read: written word (NO audio) -> tap the picture ------- */
   function showRead(ch, onDone, intro) {
     UI.openOverlay(
       "<div class='ch-title'>" + (intro || "Read this word") + "</div>" +
-      "<div class='read-word'>" + esc(ch.word.toUpperCase()) + "</div>" +
+      // shown exactly as the content spells it: beginning readers meet
+      // sight words in lowercase, and "I" stays "I"
+      "<div class='read-word'>" + esc(ch.word) + "</div>" +
       "<div class='ch-sub'>Read it all by yourself, then tap the matching picture!</div>" +
       "<button type='button' class='speak-btn small' id='ch-speak'>🔊 What do I do?</button>" +
       "<div class='word-grid' id='ch-grid'></div>"
@@ -135,7 +141,7 @@ var Activities = (function () {
           done = true;
           GameAudio.sfx.correct();
           b.classList.add("right");
-          GameAudio.say(ch.word + "! Great reading!");
+          GameAudio.say(spoken(ch) + "! Great reading!");
           celebrate();
           setTimeout(function () { UI.closeOverlay(); onDone({ correct: true, mistakes: mistakes }); }, 900);
         } else {
@@ -160,10 +166,10 @@ var Activities = (function () {
       "<button type='button' class='speak-btn' id='ch-speak'>🔊</button>" +
       "<div class='word-grid' id='ch-grid'></div>"
     );
-    bindSpeak("ch-picture", ch.word);
-    bindSpeak("ch-speak", ch.word);
+    bindSpeak("ch-picture", spoken(ch));
+    bindSpeak("ch-speak", spoken(ch));
     fillChoices("ch-grid", ch.choices, ch.word, onDone, {
-      onRight: function (w) { GameAudio.say(w); }
+      onRight: function () { GameAudio.say(spoken(ch)); }
     });
   }
 
@@ -178,7 +184,7 @@ var Activities = (function () {
     bindSpeak("ch-speak", "Which word means: " + ch.meaning);
     fillChoices("ch-grid", ch.choices, ch.word, onDone, {
       small: true,
-      onRight: function (w) { GameAudio.say(w + ". " + ch.meaning); }
+      onRight: function () { GameAudio.say(spoken(ch) + ". " + ch.meaning); }
     });
     GameAudio.say("Which word means: " + ch.meaning);
   }
@@ -194,7 +200,7 @@ var Activities = (function () {
       "<div class='word-grid' id='ch-grid'></div>"
     );
     fillChoices("ch-grid", ch.choices, ch.answer, onDone, { emoji: isEmoji, small: !isEmoji });
-    bindSpeak("ch-speak", ch.text, 0.8);
+    bindSpeak("ch-speak", ch.say || ch.text, 0.8);
   }
 
   /* ------- spell: build the word from letter tiles ------- */
@@ -264,8 +270,8 @@ var Activities = (function () {
       "<div class='word-grid' id='ch-grid'></div>"
     );
     fillChoices("ch-grid", ch.choices, ch.word, onDone, {});
-    bindSpeak("ch-speak", ch.word);
-    GameAudio.say(ch.word);
+    bindSpeak("ch-speak", spoken(ch));
+    GameAudio.say(spoken(ch));
   }
 
   /* ------- recognize: English -> tap the foreign word ------- */
@@ -293,8 +299,8 @@ var Activities = (function () {
       "<div class='word-grid' id='ch-grid'></div>"
     );
     fillChoices("ch-grid", ch.choices, ch.back, onDone, { small: true,
-      onRight: function () { GameAudio.say(ch.front + " means " + ch.back); } });
-    bindSpeak("ch-speak", ch.front);
+      onRight: function () { GameAudio.say((ch.say || ch.front) + " means " + ch.back); } });
+    bindSpeak("ch-speak", ch.say || ch.front);
   }
 
   /* ------- verseblank: complete the verse ------- */
@@ -310,10 +316,10 @@ var Activities = (function () {
       onRight: function () {
         $("ch-gap").textContent = ch.answer;
         $("ch-gap").classList.add("filled");
-        GameAudio.say(ch.text + ". " + ch.ref);
+        GameAudio.say((ch.say || ch.text) + ". " + ch.ref);
       }
     });
-    bindSpeak("ch-speak", ch.pre + " ... " + ch.post + ". " + ch.ref, 0.8);
+    bindSpeak("ch-speak", ch.say ? ch.say + ". " + ch.ref : ch.pre + " ... " + ch.post + ". " + ch.ref, 0.8);
   }
 
   /* ------- versebuild: tap the words in order ------- */
@@ -347,7 +353,7 @@ var Activities = (function () {
             done = true;
             GameAudio.sfx.correct();
             celebrate();
-            GameAudio.say(ch.text + ". " + ch.ref, 0.85);
+            GameAudio.say((ch.say || ch.text) + ". " + ch.ref, 0.85);
             setTimeout(function () { UI.closeOverlay(); onDone({ correct: true, mistakes: mistakes }); }, 1400);
           }
         } else {
@@ -370,8 +376,8 @@ var Activities = (function () {
       });
       grid.appendChild(b);
     });
-    bindSpeak("ch-speak", ch.text + ". " + ch.ref, 0.8);
-    GameAudio.say(ch.text, 0.8);
+    bindSpeak("ch-speak", (ch.say || ch.text) + ". " + ch.ref, 0.8);
+    GameAudio.say(ch.say || ch.text, 0.8);
   }
 
   function shuffledCopy(arr) {
@@ -396,8 +402,8 @@ var Activities = (function () {
     );
     fillChoices("ch-grid", ch.choices, ch.answer, onDone, { small: true,
       onRight: function () { GameAudio.say(ch.answer + ". You can read it in " + ch.ref); } });
-    bindSpeak("ch-speak", ch.q, 0.85);
-    GameAudio.say(ch.q, 0.85);
+    bindSpeak("ch-speak", ch.say || ch.q, 0.85);
+    GameAudio.say(ch.say || ch.q, 0.85);
   }
 
   /* ------- math ------- */
@@ -420,7 +426,7 @@ var Activities = (function () {
     var mistakes = 0, done = false, listening = false;
     UI.openOverlay(
       "<div class='ch-title'>" + (intro || "Say this word") + "</div>" +
-      "<div class='read-word'>" + esc(ch.word.toUpperCase()) + "</div>" +
+      "<div class='read-word'>" + esc(ch.word) + "</div>" +
       "<div class='ch-sub'>Tap the mic and say the word out loud.</div>" +
       "<button type='button' class='speak-btn small' id='ch-mic'>🎤 Tap and say it</button>" +
       "<div class='ch-sub' id='ch-listen-status'></div>" +

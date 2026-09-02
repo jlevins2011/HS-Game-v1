@@ -147,6 +147,7 @@ var UI = (function () {
 
   // kept as a safe alias — old callers refresh the build sheet instead
   function updateHotbar() { updateBuildSheet(); updateCraftButton(); }
+  function setJumpGlyph(g) { var b = $("btn-jump"); if (b) b.textContent = g; }
 
   /* ---------------- satchel ---------------- */
   var SATCHEL_GROUPS = [
@@ -164,7 +165,7 @@ var UI = (function () {
     skysteel: "⚙️ A skysteel ingot — for a better mallet!",
     "sunfruit seeds": "🌱 Build a planter (🛠️), then tap it to plant!",
     "moonmelon seeds": "🌱 Build a planter (🛠️), then tap it to plant!",
-    feather: "🪶 A soft puffbird feather.",
+    feather: "🪶 A soft puffbird feather. Two of these and some fluff make a Cloudcap!",
     shell: "🐚 A shiny shellhopper shell.",
     glowdust: "💫 Twinkling glowdust from a glowmoth.",
     "berry tart": "🥧 A warm berry tart. Mmm!",
@@ -182,6 +183,7 @@ var UI = (function () {
       "<span class='inv-tool'>🔨 " + malletNames[p.toolTier] + "</span>" +
       (p.tools.hatchet ? "<span class='inv-tool'>🪓 Hatchet</span>" : "") +
       (p.tools.brush ? "<span class='inv-tool'>🖌️ Brush</span>" : "") +
+      (p.tools.cloudcap ? "<span class='inv-tool'>🪂 Cloudcap</span>" : "") +
       (p.tools.drill ? "<span class='inv-tool legendary'>🌀 Rootbreaker Drill</span>" : "") +
       (p.tools.skybadge ? "<span class='inv-tool legendary'>🎈 Skyrider Badge</span>" : "") +
       (p.tools.sunhammer ? "<span class='inv-tool legendary'>☀️ Sunforged Mallet</span>" : "") +
@@ -244,7 +246,9 @@ var UI = (function () {
     { id: "hatchet", kind: "tool", tool: "hatchet", name: "hatchet", icon: "🪓",
       needs: { stone: 3, timber: 2 }, blurb: "Chops trees down in fewer swings!" },
     { id: "brush", kind: "tool", tool: "brush", name: "brush", icon: "🖌️",
-      needs: { timber: 2, fluff: 1 }, blurb: "Brush tuftles for fluff — they love it!" }
+      needs: { timber: 2, fluff: 1 }, blurb: "Brush tuftles for fluff — they love it!" },
+    { id: "cloudcap", kind: "tool", tool: "cloudcap", name: "cloudcap", icon: "🪂",
+      needs: { fluff: 4, feather: 2, timber: 2 }, blurb: "Hold ⬆️ while falling to GLIDE across the sky!" }
   ];
 
   function canAfford(needs) {
@@ -429,7 +433,7 @@ var UI = (function () {
     if (ready.length || malletReady) {
       html += "<div class='world-list'>";
       ready.forEach(function (r, i) {
-        var extra = r.tool ? " · word challenge" : (r.blurb ? " · " + r.blurb : "");
+        var extra = (r.blurb ? " · " + r.blurb : "") + (r.tool ? " · word challenge" : "");
         html += recipeCardHtml(r.icon, r.name, costStr(r.needs) + extra, "", "data-kind='ws' data-i='" + i + "'");
       });
       if (malletReady) {
@@ -926,16 +930,11 @@ var UI = (function () {
       AVATARS.map(function (a, i) {
         return "<button class='avatar-btn" + (i === 0 ? " picked" : "") + "' data-a='" + a + "'>" + a + "</button>";
       }).join("") + "</div>" +
-      "<div class='ch-sub'>How old is this explorer?</div>" +
-      "<div class='band-row'>" +
-      "<button class='big-btn band-btn picked' data-band='younger'>🌱 About 6–9</button>" +
-      "<button class='big-btn band-btn' data-band='older'>🌳 About 10–13</button>" +
-      "</div>" +
-      "<div class='ch-sub'>Starter lessons are picked automatically — grown-ups can change everything in the Parents area.</div>" +
-      "<button class='big-btn' id='ne-go'>🚀 START EXPLORING!</button>" +
+      "<div class='ch-sub'>Next, a grown-up picks your grade and lessons — or you can skip that for now.</div>" +
+      "<button class='big-btn' id='ne-go'>🚀 NEXT</button>" +
       "<button class='ghost-btn' id='ne-back'>⬅️ Back</button>";
     openOverlay(html);
-    var picked = { emoji: AVATARS[0], band: "younger" };
+    var picked = { emoji: AVATARS[0] };
     document.querySelectorAll(".avatar-btn").forEach(function (b) {
       b.addEventListener("pointerdown", function () {
         document.querySelectorAll(".avatar-btn").forEach(function (x) { x.classList.remove("picked"); });
@@ -943,22 +942,20 @@ var UI = (function () {
         picked.emoji = b.getAttribute("data-a");
       });
     });
-    document.querySelectorAll(".band-btn").forEach(function (b) {
-      b.addEventListener("pointerdown", function () {
-        document.querySelectorAll(".band-btn").forEach(function (x) { x.classList.remove("picked"); });
-        b.classList.add("picked");
-        picked.band = b.getAttribute("data-band");
-      });
-    });
     $("ne-back").addEventListener("pointerdown", function () { closeOverlay(); });
     $("ne-go").addEventListener("pointerdown", function () {
       var name = ($("ne-name").value || "").trim();
       if (!name) { $("ne-name").style.borderColor = "#c0392b"; $("ne-name").focus(); return; }
       var idx = Store.family.profiles.length;
-      var p = Store.addProfile({ name: name, emoji: picked.emoji, band: picked.band,
-                                 color: COLORS[idx % COLORS.length] });
-      closeOverlay();
-      selectProfile(p);
+      // The kid half is done. The grown-up half (grade + subjects) is a
+      // separate, PIN-gated step; skipping it keeps sensible defaults.
+      var p = Store.addProfile({ name: name, emoji: picked.emoji, color: COLORS[idx % COLORS.length],
+                                 grade: CONFIG.DEFAULT_GRADE, setupConfirmed: false });
+      Parent.showSetup(p.id, {
+        fromKid: true,
+        onDone: function () { closeOverlay(); selectProfile(p); },
+        onSkip: function () { closeOverlay(); selectProfile(p); }
+      });
     });
   }
 
@@ -995,7 +992,7 @@ var UI = (function () {
     showChallenge: showChallenge, showDialogue: showDialogue,
     showInventory: showInventory, toggleInventory: toggleInventory,
     showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
-    showNewExplorer: showNewExplorer,
+    showNewExplorer: showNewExplorer, setJumpGlyph: setJumpGlyph,
     rankFor: rankFor, xpNeeded: xpNeeded, nextCraftInfo: nextCraftInfo, showWorkshop: showWorkshop,
     versionLabel: versionLabel,
     openOverlay: openOverlay, closeOverlay: closeOverlay, holdToOpen: holdToOpen

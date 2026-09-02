@@ -11,7 +11,7 @@
 window.BUILTIN_CURRICULA = window.BUILTIN_CURRICULA || [];
 
 BUILTIN_CURRICULA.push({
-  id: "reading2", name: "Reading · Grade 2", subject: "reading", grade: "2",
+  id: "reading-2", name: "Reading · Grade 2", subject: "reading", grade: "2",
   icon: "📖",
   desc: "Sight words and phonics patterns for young readers: short vowels, blends, silent-e, and vowel teams.",
   tiers: [

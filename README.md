@@ -35,7 +35,8 @@ otherwise — to make the game 100% offline, download
 
 ## For kids
 
-Tap **➕ NEW EXPLORER**, pick a name and badge, and go. Left thumb walks
+Tap **➕ NEW EXPLORER**, pick a name and badge, then hand the iPad to a grown-up for
+a minute (or tap *Skip*). Left thumb walks
 (virtual joystick), right thumb looks around, tap to interact — the prompt
 under the aim dot always says what a tap will do. ⬆️ jumps, 🎒 opens the
 satchel, 🛠️ opens build mode.
@@ -57,6 +58,9 @@ satchel, 🛠️ opens build mode.
   stays how you left it). For a roof, stand in your house and look up — the
   roof caps whatever is on the tile. Taking a piece back refunds its materials
 - **🔮 Wonderstones** and **🧰 curio chests** hold challenges with spark + loot rewards
+- **🪂 Cloudcap**: tinker one from fluff, feathers and timber, then **hold ⬆️ while
+  falling to glide** — sail off a cliff to a satellite islet, chase a Starfall
+  mid-air, look where you want to go. Let go to drop
 - **Elder Alder** gives SUPER CHALLENGES that earn legendary tools — the
   **Rootbreaker Drill** (opens the sealed crystal grotto beneath the isle),
   the **Skyrider Badge** (unlocks Cloudhaven Skydock and its airship), and
@@ -78,18 +82,34 @@ satchel, 🛠️ opens build mode.
 **Long-press the 🗝️ Parents button** (home screen or pause menu). Optionally
 set a 4-digit PIN there.
 
-- **Explorers** — profiles, per-child progress (first-try accuracy by skill,
-  needs-review patterns, recently mastered), reset/remove
-- **Lessons** — the built-in sets plus **Create a lesson set**: paste a list,
-  pick the type, save. Formats:
+- **Explorers** — each child's grade and subject plan, where they are in every set
+  (the tier name and what it practices), and **🌟 ready-to-move-up** prompts when a
+  child keeps winning at the top of a grade set (promotion is always your tap —
+  "Not yet" quiets it until another run of clean wins). **🎓 Edit setup** opens
+  the grade screen; per-child progress (first-try accuracy by skill, needs-review
+  patterns, recently mastered); reset/remove
+- **🎓 The grade screen** — pick a grade (K–5) and every subject follows it:
+  Reading, Spelling and Math each get that grade's set. Change any one subject on
+  its own if a child is ahead or behind in it — it then stays put when the grade
+  changes, and follows again if you put it back in step. Bible and Latin are on/off.
+  New explorers reach this screen right after picking a name, behind the PIN if one
+  is set; "Skip" keeps sensible defaults and flags the child in the Explorers tab.
+- **Lessons** — every set, built-in or yours, opens with **✏️ View / edit**: tiers,
+  words, verses and questions, each with add / edit / remove and an optional
+  *say it as…* pronunciation. **Editing a built-in makes your own copy under the
+  same name** — the child's progress on the words you didn't touch is kept, a removed
+  word stops appearing, an added one enters as new, and **Restore original** puts it
+  back. Math sets are shown read-only (they're generated from recipes). Plus
+  **Create a lesson set**: paste a list, pick the type, save. Formats:
   - *Spelling*: one word per line
   - *Reading*: `word` or `word 🐶` (emoji enables picture activities)
   - *Vocabulary*: `aqua = water`
   - *Bible verses*: `John 3:16 | For God so loved the world...`
   - *Questions*: `Question? | right answer | wrong | wrong`
-- **Assignments** — per child, set each lesson set's weight 0–5 (how often it
-  appears in play). Bible weighting is simply the weight on Bible sets.
-  Multiple sets per child and one set for multiple children both work.
+- **Assignments** — per child, a switch turns each set on or off (off remembers
+  its weight) and a weight 1–5 sets how often it appears in play. Bible weighting
+  is simply the weight on the Bible set. Multiple sets per child and one set for
+  multiple children both work; grades themselves are chosen in Explorers → Edit setup.
   This tab also holds **⏳ Question pacing** — the shortest time that may
   pass between one challenge and the next (Off, or 1–30 minutes), set per
   child, with a one-tap "use this for every explorer". Wonderstones, curio
@@ -141,6 +161,10 @@ and a bare "a" is read as the article ("uh") while the obvious fix "ay" comes ou
 "eye" on some voices. Your picks are saved on that device only, since the right spelling
 depends on which voice is installed there.
 
+Words can carry their own pronunciation: a `say:` field on any word, verse or
+question (set it in the bank editor as *say it as…*) is what the voice reads instead
+of the spelling — for homographs like *read* and *live*, Latin, and unusual names.
+
 One button behaves differently **on purpose**: on the "read this word" card
 the speaker says *"Read the word, then tap the picture that matches"* and
 never says the word itself. That card is the one that measures whether a
@@ -156,8 +180,16 @@ clean streaks and quietly step back during rough patches. Tuning lives in
 
 ## Built-in content
 
-- Reading Grade 2 & Grade 5 (with meanings), Spelling Grade 2 & Grade 5
-- **Latin · First Steps** — original introductory material written for this game
+- **Reading K–5** — sight words and picture words for K–1 (shown lowercase, as in
+  books), compounds/prefixes/suffixes for 3, chapter-book vocabulary with meanings
+  for 4–5, with practice sentences throughout
+- **Spelling K–5** — three-letter words up through -tion/-sion, one phonics step per tier
+- **Math Facts & Fluency K–5** — generated from per-grade recipes and tracked
+  fact-by-fact. Labeled honestly: multiple-choice fluency, a supplement to a math
+  curriculum, not a replacement
+- **Latin · First Steps** — original introductory material written for this game,
+  spoken with **classical** pronunciation (v as w, c and g always hard, ae as "eye")
+  via per-word `say:` respellings
 - **Bible · Verses & Stories** — memory verses quoted verbatim from the KJV
   (public domain) and narrative knowledge questions; **every Bible item carries
   its Scripture reference** so it can be audited. Parents control how much

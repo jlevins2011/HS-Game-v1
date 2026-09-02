@@ -53,7 +53,7 @@ var Parent = (function () {
   }
 
   /* ---------------- entry + PIN gate ---------------- */
-  function show() {
+  function armOnNextTouch() {
     armed = false;
     var wait = document.getElementById("overlay");
     if (wait) {
@@ -61,12 +61,19 @@ var Parent = (function () {
       wait.addEventListener("pointerdown", arm, { once: true });
       wait.addEventListener("mousedown", arm, { once: true });
     }
+  }
+
+  function show() {
+    armOnNextTouch();
     var pin = Store.family.settings.pin;
     if (pin) showPinGate(pin, function () { render(); });
     else render();
   }
 
-  function showPinGate(pin, onOk) {
+  function gradeLabel(g) { return CONFIG.GRADE_LABELS[g] || ("Grade " + g); }
+  function gradeShort(g) { return g === "K" ? "K" : "Gr " + g; }
+
+  function showPinGate(pin, onOk, onCancel) {
     UI.openOverlay(
       "<div class='ch-title'>🗝️ Parents</div>" +
       "<div class='ch-sub' id='pin-msg'>Enter the parent PIN</div>" +
@@ -96,7 +103,7 @@ var Parent = (function () {
       });
       pad.appendChild(b);
     });
-    tap($("pin-cancel"), UI.closeOverlay);
+    tap($("pin-cancel"), onCancel || UI.closeOverlay);
   }
 
   /* ---------------- shell ---------------- */
@@ -199,10 +206,43 @@ var Parent = (function () {
           save.stats.lifetime.challenges + " lifetime challenges"
         : "Hasn't played yet";
       var pace = Store.paceMinutes(p.id);
+      var plan = Store.gradePlanFor(p.id);
+      var planBits = CONFIG.SUBJECTS.map(function (sd) {
+        var sub = plan.subjects[sd.id];
+        if (!sub || !sub.enabled) return null;
+        return sd.icon + " " + (sd.graded ? gradeShort(sub.grade) : sd.label);
+      }).filter(Boolean).join(" · ");
+
+      // where they are, per set — the engine always knew; now the parent does
+      var focus = save ? Learning.focusList(save, p.id).filter(function (f) { return f.enabled; }) : [];
+      var focusHtml = focus.length
+        ? "<div class='pr-focus'>" + focus.map(function (f) {
+            return "<div class='pr-focus-row'><b>" + esc(f.name) + "</b> — " +
+              esc(f.tierName || ("level " + (f.tier + 1))) + " <span class='pr-quiet-inline'>(" + (f.tier + 1) + "/" + f.tierCount + ")</span>" +
+              (f.focus ? "<br><span class='pr-quiet-inline'>" + esc(f.focus) + "</span>" : "") + "</div>";
+          }).join("") + "</div>"
+        : "";
+
+      var promos = save ? Learning.promotions(save, p.id) : [];
+      var promoHtml = promos.map(function (pr) {
+        return "<div class='pr-promo'>🌟 <b>" + esc(p.name) + "</b> is cruising through <b>" + esc(pr.name) + "</b> — " +
+          pr.tierWins + " clean wins at the top level." +
+          (pr.nextGrade
+            ? "<div class='pr-row'><button type='button' class='big-btn small-btn' data-promote='" + p.id + "|" + pr.cid + "'>⬆️ Move up to " + esc(gradeLabel(pr.nextGrade)) + "</button>" +
+              "<button type='button' class='ghost-btn inline-btn' data-snooze='" + p.id + "|" + pr.cid + "|" + pr.tierWins + "'>Not yet</button></div>"
+            : "<br><span class='pr-quiet-inline'>That's the top of the built-in ladder — keep practicing, or add your own lists.</span>") +
+          "</div>";
+      }).join("");
+
       return "<div class='pr-section'>" +
-        "<b>" + p.emoji + " " + esc(p.name) + "</b><br>" + line + "<br>" +
+        "<b>" + p.emoji + " " + esc(p.name) + "</b> <span class='tag builtin'>" + esc(gradeLabel(p.grade)) + "</span>" +
+        (p.setupConfirmed ? "" : " <span class='tag warn'>needs a grown-up's setup</span>") +
+        "<br>" + line + "<br>" +
+        "<span class='pr-quiet'>" + esc(planBits || "no subjects on") + "</span>" +
         "<span class='pr-quiet'>⏳ " + (pace ? "at least " + pace + " min between questions" : "no gap between questions") + "</span>" +
+        focusHtml + promoHtml +
         "<div class='pr-row'>" +
+        "<button type='button' class='big-btn small-btn' data-setup='" + p.id + "'>🎓 Edit setup</button>" +
         "<button type='button' class='big-btn small-btn' data-view='" + p.id + "'>📈 Progress</button>" +
         "<button type='button' class='ghost-btn danger inline-btn' data-reset='" + p.id + "'>Reset progress</button>" +
         "<button type='button' class='ghost-btn danger inline-btn' data-remove='" + p.id + "'>Remove</button>" +
@@ -219,7 +259,23 @@ var Parent = (function () {
       UI.showHome();
       UI.showNewExplorer();
     });
+    tapEach("[data-setup]", function (b) {
+      showSetup(b.getAttribute("data-setup"), { onDone: function () { render(); }, onBack: function () { render(); } });
+    });
     tapEach("[data-view]", function (b) { showProgress(b.getAttribute("data-view")); });
+    tapEach("[data-promote]", function (b) {
+      var parts = b.getAttribute("data-promote").split("|");
+      var to = Store.promote(parts[0], parts[1]);
+      var cur = to && Store.curriculum(to);
+      UI.toast(cur ? "⬆️ Moved up to " + cur.name + "!" : "Already at the top.");
+      render();
+    });
+    tapEach("[data-snooze]", function (b) {
+      var parts = b.getAttribute("data-snooze").split("|");
+      Store.snoozePromotion(parts[0], parts[1], Number(parts[2]) || 0);
+      UI.toast("Okay — we'll ask again after more clean wins.");
+      render();
+    });
     each("[data-reset]", function (b) {
       armDouble(b, "Tap again to RESET", function () {
         Store.reset(b.getAttribute("data-reset"));
@@ -234,6 +290,133 @@ var Parent = (function () {
         render();
       });
     });
+  }
+
+  /* ---------------- setup screen: grade + subjects ----------------
+     Shared by the New Explorer flow ("hand this to a grown-up") and the
+     Explorers tab ("Edit setup"). opts:
+       fromKid  — show the hand-off step first (PIN-gated if a PIN exists)
+                  and a "Skip — set up later" that keeps sensible defaults
+       onDone() — after SAVE; onSkip() — after Skip; onBack() — cancel */
+  function showSetup(pid, opts) {
+    opts = opts || {};
+    var p = profileById(pid);
+    if (!p) return;
+    if (opts.fromKid) { showHandoff(pid, opts); return; }
+    renderSetup(pid, opts);
+  }
+
+  function showHandoff(pid, opts) {
+    var p = profileById(pid);
+    armOnNextTouch();
+    UI.openOverlay(
+      "<div class='ch-title'>🎓 Hand this to a grown-up</div>" +
+      "<div class='ch-sub'>A grown-up picks " + esc(p.name) + "'s grade and subjects. " +
+      "It only takes a minute, and it can be changed any time in the Parents area.</div>" +
+      "<button type='button' class='big-btn' id='ho-adult'>" + (Store.family.settings.pin ? "🔒 I'm a grown-up" : "👋 I'm a grown-up") + "</button>" +
+      "<button type='button' class='ghost-btn' id='ho-skip'>Skip — set up later</button>"
+    );
+    tap($("ho-adult"), function () {
+      var pin = Store.family.settings.pin;
+      if (pin) showPinGate(pin, function () { renderSetup(pid, opts); }, function () { showHandoff(pid, opts); });
+      else renderSetup(pid, opts);
+    });
+    tap($("ho-skip"), function () {
+      // defaults for the default grade, flagged so the Explorers tab shows it
+      if (!Store.assignmentsFor(pid).length) Store.applyGradePlan(pid, { grade: p.grade });
+      p.setupConfirmed = false;
+      Store.saveFamily();
+      if (opts.onSkip) opts.onSkip();
+    });
+  }
+
+  function renderSetup(pid, opts) {
+    var p = profileById(pid);
+    var plan = Store.gradePlanFor(pid);
+    if (opts.fromKid && !p.setupConfirmed) {
+      // a brand-new child: every graded subject follows the top grade
+      CONFIG.SUBJECTS.forEach(function (sd) { if (sd.graded) plan.subjects[sd.id].autoGrade = true; });
+    }
+
+    function gradeChips(sel, attr) {
+      return CONFIG.GRADES.map(function (g) {
+        return "<button type='button' class='grade-chip" + (g === sel ? " active" : "") + "' " + attr + "='" + g + "'>" + g + "</button>";
+      }).join("");
+    }
+    function rowHtml(sd) {
+      var sub = plan.subjects[sd.id];
+      var ctl = sd.graded
+        ? "<div class='grade-row' data-sub-grades='" + sd.id + "'>" + gradeChips(sub.grade, "data-sg='" + sd.id + "' data-g") + "</div>"
+        : "<span class='pr-quiet-inline'>" + esc(sd.note || "") + "</span>";
+      return "<div class='setup-row" + (sub.enabled ? " on" : "") + "' data-setup-row='" + sd.id + "'>" +
+        "<div class='setup-head'><span class='setup-name'>" + sd.icon + " " + esc(sd.label) + "</span>" +
+        "<button type='button' class='tog" + (sub.enabled ? " on" : "") + "' data-tog-sub='" + sd.id + "' aria-label='on/off'><span></span></button></div>" +
+        ctl + "</div>";
+    }
+
+    UI.openOverlay(
+      "<div class='ch-title'>🎓 " + esc(p.name) + "'s lessons</div>" +
+      "<div class='parent-scroll' id='pr-body'>" +
+      "<div class='pr-section'><b>Grade</b><br><i>Picking a grade sets every subject to match. " +
+      "Change any subject on its own if " + esc(p.name) + " is ahead or behind in it — that subject then stays put when the grade changes.</i>" +
+      "<div class='grade-row big' id='setup-grade'>" + gradeChips(plan.grade, "data-grade") + "</div>" +
+      "<div class='pace-now' id='setup-grade-label'>" + esc(gradeLabel(plan.grade)) + "</div></div>" +
+      CONFIG.SUBJECTS.map(rowHtml).join("") +
+      "<div class='pr-section'><i>Math sets are fact fluency — a supplement to a math curriculum, not a replacement. " +
+      "Bible and Latin aren't grade-leveled. Weights (how often each shows up) live in the Assignments tab.</i></div>" +
+      "</div>" +
+      "<div class='pr-row setup-actions'>" +
+      "<button type='button' class='big-btn' id='setup-save'>" + (opts.fromKid ? "✅ SAVE & START EXPLORING" : "✅ SAVE") + "</button>" +
+      (opts.fromKid ? "<button type='button' class='ghost-btn' id='setup-skip'>Skip — set up later</button>"
+                    : "<button type='button' class='ghost-btn' id='setup-back'>⬅️ Back</button>") +
+      "</div>"
+    );
+
+    function paint() {
+      each("[data-grade]", function (b) { b.classList.toggle("active", b.getAttribute("data-grade") === plan.grade); });
+      var gl = $("setup-grade-label"); if (gl) gl.textContent = gradeLabel(plan.grade);
+      CONFIG.SUBJECTS.forEach(function (sd) {
+        var sub = plan.subjects[sd.id];
+        each("[data-setup-row='" + sd.id + "']", function (r) { r.classList.toggle("on", !!sub.enabled); });
+        each("[data-tog-sub='" + sd.id + "']", function (t) { t.classList.toggle("on", !!sub.enabled); });
+        if (sd.graded) each("[data-sg='" + sd.id + "']", function (b) {
+          b.classList.toggle("active", b.getAttribute("data-g") === sub.grade);
+          b.classList.toggle("synced", sub.autoGrade && b.getAttribute("data-g") === sub.grade);
+        });
+      });
+    }
+    tapEach("[data-grade]", function (b) {
+      plan.grade = b.getAttribute("data-grade");
+      CONFIG.SUBJECTS.forEach(function (sd) {
+        var sub = plan.subjects[sd.id];
+        if (sd.graded && sub.autoGrade) sub.grade = plan.grade;
+      });
+      paint();
+    });
+    tapEach("[data-sg]", function (b) {
+      var sub = plan.subjects[b.getAttribute("data-sg")];
+      sub.grade = b.getAttribute("data-g");
+      sub.autoGrade = (sub.grade === plan.grade);   // back in step = follows the grade again
+      paint();
+    });
+    tapEach("[data-tog-sub]", function (b) {
+      var sub = plan.subjects[b.getAttribute("data-tog-sub")];
+      sub.enabled = !sub.enabled;
+      paint();
+    });
+    tap($("setup-save"), function () {
+      Store.applyGradePlan(pid, plan);
+      UI.toast("🎓 " + p.name + " is set up for " + gradeLabel(plan.grade) + ".");
+      if (opts.onDone) opts.onDone(plan);
+    });
+    tap($("setup-skip"), function () {
+      if (!Store.assignmentsFor(pid).length) Store.applyGradePlan(pid, { grade: p.grade });
+      p.setupConfirmed = false;
+      Store.saveFamily();
+      if (opts.onSkip) opts.onSkip();
+    });
+    tap($("setup-back"), function () { if (opts.onBack) opts.onBack(); else render(); });
+    paint();
   }
 
   function profileById(pid) {
@@ -316,14 +499,18 @@ var Parent = (function () {
   function renderLessons() {
     var all = Store.allCurricula();
     var rows = all.map(function (c) {
+      var over = Store.isOverridden(c.id);
       return "<div class='pr-section'>" +
         "<b>" + (c.icon || "📚") + " " + esc(c.name) + "</b> " +
         (c.custom ? "<span class='tag'>custom</span>" : "<span class='tag builtin'>built-in</span>") +
+        (over ? " <span class='tag edited'>customized</span>" : "") +
         "<br><i>" + esc(c.desc || subjectLabel(c.subject)) + "</i><br>" +
         countLabel(c) + " · subject: " + subjectLabel(c.subject) +
         (c.translation ? " · " + c.translation : "") +
-        (c.custom ? "<br><button type='button' class='ghost-btn danger inline-btn' data-delcur='" + c.id + "'>Delete</button>" : "") +
-        "</div>";
+        "<div class='pr-row'>" +
+        "<button type='button' class='big-btn small-btn' data-open='" + c.id + "'>" + (c.subject === "math" ? "👁️ View" : "✏️ View / edit") + "</button>" +
+        (c.custom ? "<button type='button' class='ghost-btn danger inline-btn' data-delcur='" + c.id + "'>Delete</button>" : "") +
+        "</div></div>";
     }).join("");
     var help = TYPE_HELP[draft.type] || TYPE_HELP.spelling;
     return rows +
@@ -416,6 +603,7 @@ var Parent = (function () {
   }
 
   function wireLessons() {
+    tapEach("[data-open]", function (b) { showBank(b.getAttribute("data-open")); });
     each("[data-delcur]", function (b) {
       armDouble(b, "Tap again to DELETE", function () {
         Store.removeCustomCurriculum(b.getAttribute("data-delcur"));
@@ -457,6 +645,192 @@ var Parent = (function () {
     });
   }
 
+  /* ---------------- bank viewer / editor ----------------
+     Any set can be opened. Editing a built-in makes a household copy under
+     the SAME id (Store.editableCopy), so a child's mastery on the untouched
+     words is kept; "Restore original" just deletes the copy. */
+  var FIELDS = {
+    reading:  [["word", "word"], ["emoji", "picture emoji (optional)"], ["meaning", "meaning (optional)"], ["say", "say it as… (optional)"]],
+    spelling: [["word", "word"], ["say", "say it as… (optional)"]],
+    vocab:    [["front", "word"], ["back", "meaning"], ["say", "say it as… (optional)"]],
+    verse:    [["ref", "reference"], ["text", "verse text"], ["say", "say it as… (optional)"]],
+    fact:     [["q", "question"], ["a", "right answer"], ["wrong", "wrong answers, comma-separated"], ["ref", "reference (optional)"], ["say", "say it as… (optional)"]]
+  };
+
+  // a tier's items as uniform records the editor can list and write back
+  function tierRecords(cur, tier) {
+    var out = [];
+    if (cur.subject === "reading") {
+      (tier.words || []).forEach(function (w, i) {
+        var o = typeof w === "string" ? { word: w } : w;
+        out.push({ kind: "reading", idx: i, label: o.word + (o.emoji ? " " + o.emoji : "") + (o.say ? " 🔊" : ""), fields: o });
+      });
+    } else if (cur.subject === "spelling") {
+      (tier.words || []).forEach(function (w, i) {
+        var o = typeof w === "string" ? { word: w } : w;
+        out.push({ kind: "spelling", idx: i, label: o.word + (o.say ? " 🔊" : ""), fields: o });
+      });
+    } else if (cur.subject === "vocab") {
+      (tier.pairs || []).forEach(function (pr, i) {
+        var o = Array.isArray(pr) ? { front: pr[0], back: pr[1] } : pr;
+        out.push({ kind: "vocab", idx: i, label: o.front + " = " + o.back + (o.say ? " 🔊" : ""), fields: o });
+      });
+    } else if (cur.subject === "bible" || cur.subject === "quiz") {
+      (tier.verses || []).forEach(function (v, i) {
+        out.push({ kind: "verse", idx: i, label: v.ref + " — " + v.text.slice(0, 48) + (v.text.length > 48 ? "…" : ""), fields: v });
+      });
+      (tier.facts || []).forEach(function (f, i) {
+        var wrong = (f.choices || []).filter(function (c) { return c !== f.a; }).join(", ");
+        out.push({ kind: "fact", idx: i, label: f.q.slice(0, 56) + (f.q.length > 56 ? "…" : ""), fields: Object.assign({}, f, { wrong: wrong }) });
+      });
+    }
+    return out;
+  }
+
+  function cleanFields(kind, vals) {
+    var o = {};
+    Object.keys(vals).forEach(function (k) { var v = String(vals[k] || "").trim(); if (v) o[k] = v; });
+    if (kind === "reading" || kind === "spelling") { if (!o.word) throw new Error("The word can't be empty."); }
+    if (kind === "vocab") { if (!o.front || !o.back) throw new Error("Both the word and its meaning are needed."); }
+    if (kind === "verse") { if (!o.ref || !o.text) throw new Error("A reference and the verse text are needed."); }
+    if (kind === "fact") {
+      if (!o.q || !o.a) throw new Error("A question and its right answer are needed.");
+      var wrong = (o.wrong || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!wrong.length) throw new Error("Add at least one wrong answer.");
+      o.choices = [o.a].concat(wrong);
+      delete o.wrong;
+      if (!o.ref) o.ref = "";
+    }
+    return o;
+  }
+
+  function writeRecord(cur, tier, kind, idx, fields) {
+    if (kind === "reading") { if (idx == null) tier.words.push(fields); else tier.words[idx] = fields; }
+    else if (kind === "spelling") {
+      var v = fields.say ? fields : fields.word;
+      if (idx == null) tier.words.push(v); else tier.words[idx] = v;
+    }
+    else if (kind === "vocab") { if (idx == null) tier.pairs.push(fields); else tier.pairs[idx] = fields; }
+    else if (kind === "verse") { tier.verses = tier.verses || []; if (idx == null) tier.verses.push(fields); else tier.verses[idx] = fields; }
+    else if (kind === "fact") { tier.facts = tier.facts || []; if (idx == null) tier.facts.push(fields); else tier.facts[idx] = fields; }
+  }
+  function removeRecord(cur, tier, kind, idx) {
+    var arr = kind === "vocab" ? tier.pairs : kind === "verse" ? tier.verses : kind === "fact" ? tier.facts : tier.words;
+    if (arr) arr.splice(idx, 1);
+  }
+
+  var bankEdit = null;   // { tier, kind, idx } of the row currently open for editing
+  function showBank(cid) {
+    var cur = Store.curriculum(cid);
+    if (!cur) { render("lessons"); return; }
+    var editable = cur.subject !== "math";
+    var over = Store.isOverridden(cid);
+    var addKinds = cur.subject === "bible" || cur.subject === "quiz" ? ["verse", "fact"] : [cur.subject];
+
+    function formHtml(kind, fields, tierIdx, idx) {
+      var tag = "data-form='" + tierIdx + "|" + kind + "|" + (idx == null ? "new" : idx) + "'";
+      return "<div class='bank-form' " + tag + ">" +
+        FIELDS[kind].map(function (f) {
+          return "<input type='text' class='pr-input' data-f='" + f[0] + "' placeholder='" + esc(f[1]) + "' " +
+            "autocapitalize='none' spellcheck='false' value='" + esc(fields[f[0]] || "") + "'>";
+        }).join("") +
+        "<div class='pr-error' data-ferr></div>" +
+        "<div class='pr-row'><button type='button' class='big-btn small-btn' data-fsave>SAVE</button>" +
+        "<button type='button' class='ghost-btn inline-btn' data-fcancel>Cancel</button></div></div>";
+    }
+
+    var tiersHtml = (cur.tiers || []).map(function (t, ti) {
+      var body;
+      if (cur.subject === "math") {
+        body = "<div class='pr-quiet'>Generated from these recipes (editing math is coming):</div>" +
+          "<ul class='bank-list'>" + (t.gen || []).map(function (g) {
+            return "<li>" + esc(g.op) + " · " + g.aMin + "–" + g.aMax + " " + esc(g.op) + " " + g.bMin + "–" + g.bMax +
+              (g.sumMax ? " (sums to " + g.sumMax + ")" : "") + "</li>";
+          }).join("") + "</ul>";
+      } else {
+        var recs = tierRecords(cur, t);
+        body = "<ul class='bank-list'>" + recs.map(function (r) {
+          var open = bankEdit && bankEdit.tier === ti && bankEdit.kind === r.kind && bankEdit.idx === r.idx;
+          return "<li" + (open ? " class='editing'" : "") + "><span class='bank-item'>" + esc(r.label) + "</span>" +
+            (editable ? "<span class='bank-ctl'><button type='button' class='bank-btn' data-edit='" + ti + "|" + r.kind + "|" + r.idx + "'>✏️</button>" +
+              "<button type='button' class='bank-btn danger' data-del='" + ti + "|" + r.kind + "|" + r.idx + "'>✕</button></span>" : "") +
+            (open ? formHtml(r.kind, r.fields, ti, r.idx) : "") + "</li>";
+        }).join("") + "</ul>" +
+        ((t.sentences || []).length ? "<div class='pr-quiet'>" + t.sentences.length + " practice sentence" + (t.sentences.length === 1 ? "" : "s") + " (shown as written; not editable yet)</div>" : "") +
+        (editable ? (bankEdit && bankEdit.tier === ti && bankEdit.idx === "new"
+            ? formHtml(bankEdit.kind, {}, ti, null)
+            : "<div class='pr-row'>" + addKinds.map(function (k) {
+                return "<button type='button' class='ghost-btn inline-btn' data-add='" + ti + "|" + k + "'>➕ Add " +
+                  (k === "verse" ? "verse" : k === "fact" ? "question" : "word") + "</button>";
+              }).join("") + "</div>") : "");
+      }
+      return "<div class='pr-section'><b>" + esc(t.name || ("Level " + (ti + 1))) + "</b>" +
+        (t.focus ? "<br><i>" + esc(t.focus) + "</i>" : "") + body + "</div>";
+    }).join("");
+
+    UI.openOverlay(
+      "<div class='ch-title'>" + (cur.icon || "📚") + " " + esc(cur.name) + "</div>" +
+      "<div class='ch-sub'>" + (cur.custom ? "Your set" : over ? "Built-in set, customized by you" : "Built-in set") +
+      (editable && !cur.custom && !over ? " — the first edit makes your own copy; the original stays safe" : "") + "</div>" +
+      "<div class='parent-scroll' id='pr-body'>" + tiersHtml + "</div>" +
+      "<div class='pr-row setup-actions'>" +
+      "<button type='button' class='big-btn' id='bank-back'>⬅️ BACK</button>" +
+      (over ? "<button type='button' class='ghost-btn danger inline-btn' id='bank-restore'>Restore original</button>" : "") +
+      "</div>"
+    );
+    wireInputs();
+    tap($("bank-back"), function () { bankEdit = null; render("lessons"); });
+    var rst = $("bank-restore");
+    if (rst) armDouble(rst, "Tap again to RESTORE", function () {
+      Store.clearOverride(cid);
+      bankEdit = null;
+      UI.toast("Back to the original " + cur.name + ".");
+      showBank(cid);
+    });
+    tapEach("[data-edit]", function (b) {
+      var q = b.getAttribute("data-edit").split("|");
+      bankEdit = { tier: Number(q[0]), kind: q[1], idx: Number(q[2]) };
+      showBank(cid);
+    });
+    tapEach("[data-add]", function (b) {
+      var q = b.getAttribute("data-add").split("|");
+      bankEdit = { tier: Number(q[0]), kind: q[1], idx: "new" };
+      showBank(cid);
+    });
+    each("[data-del]", function (b) {
+      var q = b.getAttribute("data-del").split("|");
+      armDouble(b, "sure?", function () {
+        var copy = Store.editableCopy(cid);
+        removeRecord(copy, copy.tiers[Number(q[0])], q[1], Number(q[2]));
+        Store.commitEdit(cid);
+        bankEdit = null;
+        showBank(cid);
+      });
+    });
+    each("[data-form]", function (form) {
+      var q = form.getAttribute("data-form").split("|");
+      var ti = Number(q[0]), kind = q[1], idx = q[2] === "new" ? null : Number(q[2]);
+      tap(form.querySelector("[data-fsave]"), function () {
+        var vals = {};
+        Array.prototype.forEach.call(form.querySelectorAll("[data-f]"), function (inp) { vals[inp.getAttribute("data-f")] = inp.value; });
+        try {
+          var fields = cleanFields(kind, vals);
+          var copy = Store.editableCopy(cid);
+          writeRecord(copy, copy.tiers[ti], kind, idx, fields);
+          Store.commitEdit(cid);
+          bankEdit = null;
+          UI.toast(idx == null ? "Added!" : "Saved.");
+          showBank(cid);
+        } catch (e) {
+          form.querySelector("[data-ferr]").textContent = e.message;
+        }
+      });
+      tap(form.querySelector("[data-fcancel]"), function () { bankEdit = null; showBank(cid); });
+      var first = form.querySelector("[data-f]");
+      if (first && idx == null) setTimeout(function () { try { first.focus(); } catch (e) {} }, 50);
+    });
+  }
+
   /* ---------------- assignments tab ---------------- */
   function paceLabel(mins) {
     if (!mins) return "No gap — questions whenever they're found";
@@ -492,24 +866,31 @@ var Parent = (function () {
       "</div>";
 
     var assigns = Store.assignmentsFor(chosenChild);
-    function weightOf(cid) {
-      var a = assigns.filter(function (x) { return x.cid === cid; })[0];
-      return a ? a.weight : 0;
-    }
-    var rows = Store.allCurricula().map(function (c) {
-      var w = weightOf(c.id);
-      return "<div class='pr-section assign-row" + (w > 0 ? " on" : "") + "' data-row='" + c.id + "'>" +
+    function rowOf(cid) { return assigns.filter(function (x) { return x.cid === cid; })[0] || null; }
+    // the child's own grade sets first, then everything else they could turn on
+    var mine = assigns.map(function (a) { return Store.curriculum(a.cid); }).filter(Boolean);
+    var rest = Store.allCurricula().filter(function (c) { return !rowOf(c.id) && !Store.parseGradeSet(c.id); });
+    function rowHtml(c) {
+      var a = rowOf(c.id);
+      var on = !!(a && a.enabled);
+      var w = a ? a.weight : 0;
+      return "<div class='pr-section assign-row" + (on ? " on" : "") + "' data-row='" + c.id + "'>" +
         "<span class='assign-name'>" + (c.icon || "📚") + " " + esc(c.name) + "</span>" +
         "<span class='assign-ctl'>" +
+        "<button type='button' class='tog" + (on ? " on" : "") + "' data-tog='" + c.id + "' aria-label='on/off'><span></span></button>" +
         "<button type='button' class='wt-btn' data-dec='" + c.id + "'>−</button>" +
-        "<span class='wt-val' data-wt='" + c.id + "'>" + (w > 0 ? "weight " + w : "off") + "</span>" +
+        "<span class='wt-val' data-wt='" + c.id + "'>" + (w > 0 ? "weight " + w : "—") + "</span>" +
         "<button type='button' class='wt-btn' data-inc='" + c.id + "'>+</button>" +
         "</span></div>";
-    }).join("");
+    }
+    var p = profileById(chosenChild);
     return chips + paceBox +
-      "<div class='pr-section'><i>Weight controls how often each subject appears in play. " +
-      "Higher weight = more often. “Off” removes it. Bible weighting is simply the weight on Bible sets.</i></div>" +
-      rows;
+      "<div class='pr-section'><i>The switch turns a set on or off (off remembers its weight). " +
+      "Weight is how often it shows up in play, 1–5. Bible weighting is simply the weight on the Bible set. " +
+      "Grades are chosen in <b>Explorers → Edit setup</b>.</i></div>" +
+      "<div class='pr-quiet'>" + esc(p ? p.name + "'s sets" : "This explorer's sets") + "</div>" +
+      mine.map(rowHtml).join("") +
+      (rest.length ? "<div class='pr-quiet'>Other sets you can turn on</div>" + rest.map(rowHtml).join("") : "");
   }
 
   function wireAssign() {
@@ -538,22 +919,39 @@ var Parent = (function () {
     });
 
     // Update the row in place. A full re-render here would throw the parent
-    // back to the top of the list on every single tap of + or −.
-    function bump(cid, delta) {
+    // back to the top of the list on every single tap.
+    function paintRow(cid, a) {
+      var on = !!(a && a.enabled), w = a ? a.weight : 0;
+      each("[data-wt='" + cid + "']", function (el) { el.textContent = w > 0 ? "weight " + w : "—"; });
+      each("[data-row='" + cid + "']", function (el) { el.classList.toggle("on", on); });
+      each("[data-tog='" + cid + "']", function (el) { el.classList.toggle("on", on); });
+    }
+    function rowFor(cid, create) {
       var assigns = Store.assignmentsFor(chosenChild);
       var a = assigns.filter(function (x) { return x.cid === cid; })[0];
-      if (!a && delta > 0) { a = { cid: cid, weight: 1 }; assigns.push(a); }
-      else if (a) {
-        a.weight = Math.max(0, Math.min(5, a.weight + delta));
-        if (a.weight === 0) { assigns.splice(assigns.indexOf(a), 1); a = null; }
+      if (!a && create) {
+        var sd = Store.parseGradeSet(cid) ? Store.subjectDef(Store.parseGradeSet(cid).subject) : null;
+        a = { cid: cid, weight: sd ? sd.weight : 2, enabled: true, autoGrade: false };
+        assigns.push(a);
       }
+      return a || null;
+    }
+    function bump(cid, delta) {
+      var a = rowFor(cid, true);
+      a.weight = Math.max(1, Math.min(5, a.weight + delta));
+      if (!a.enabled && delta > 0) a.enabled = true;   // nudging a weight up means "I want this"
       Store.saveFamily();
-      var w = a ? a.weight : 0;
-      each("[data-wt='" + cid + "']", function (el) { el.textContent = w > 0 ? "weight " + w : "off"; });
-      each("[data-row='" + cid + "']", function (el) { el.classList.toggle("on", w > 0); });
+      paintRow(cid, a);
     }
     tapEach("[data-inc]", function (b) { bump(b.getAttribute("data-inc"), 1); });
     tapEach("[data-dec]", function (b) { bump(b.getAttribute("data-dec"), -1); });
+    tapEach("[data-tog]", function (b) {
+      var cid = b.getAttribute("data-tog");
+      var a = rowFor(cid, true);
+      a.enabled = !a.enabled;      // weight is remembered either way
+      Store.saveFamily();
+      paintRow(cid, a);
+    });
   }
 
   /* ---------------- reports & settings tab ---------------- */
@@ -770,5 +1168,5 @@ var Parent = (function () {
     });
   }
 
-  return { show: show };
+  return { show: show, showSetup: showSetup };
 })();

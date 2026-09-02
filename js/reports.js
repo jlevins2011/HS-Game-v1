@@ -54,6 +54,25 @@ var Reports = (function () {
     lines.push("- Game level: " + p.level + " (" + UI.rankFor(p.level) + "), " + p.sparks + " sparks");
     var pace = Store.paceMinutes(profile.id);
     lines.push("- Question pacing: " + (pace ? "at least " + pace + " min between challenges" : "off"));
+    lines.push("- Grade: " + (CONFIG.GRADE_LABELS[profile.grade] || profile.grade || "not set"));
+    lines.push("");
+    lines.push("WHERE THEY ARE");
+    Learning.focusList(save, profile.id).forEach(function (f) {
+      if (!f.enabled) return;
+      lines.push("- " + f.name + ": " + (f.tierName || "level " + (f.tier + 1)) +
+        " (" + (f.tier + 1) + " of " + f.tierCount + ")" + (f.focus ? " — " + f.focus : ""));
+    });
+    var promos = Learning.promotions(save, profile.id);
+    if (promos.length) {
+      lines.push("");
+      lines.push("READY TO MOVE UP");
+      promos.forEach(function (pr) {
+        lines.push("- " + profile.name + " is cruising through " + pr.name + " (" + pr.tierWins +
+          " clean wins at the top level)." + (pr.nextGrade
+            ? " Consider moving up to " + (CONFIG.GRADE_LABELS[pr.nextGrade] || "grade " + pr.nextGrade) + " in the Parents area."
+            : " That's the top of the built-in ladder — keep practicing, or add your own lists."));
+      });
+    }
     lines.push("");
     lines.push("PRACTICE THIS WEEK");
     var keys = Object.keys(s.challenges);

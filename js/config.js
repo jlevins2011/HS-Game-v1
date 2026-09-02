@@ -14,8 +14,8 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.1.2",
-    built: "2026-08-28",
+    version: "2.2.0",
+    built: "2026-09-02",
     currencyName: "sparks",
     currencyIcon: "✨",
     playerTitle: "Keeper"           // what the child is called in-world
@@ -29,7 +29,10 @@ var CONFIG = {
     waterSpeedMul: 0.55,
     lookSensitivity: 0.0042,
     joyRadius: 55,                  // touch joystick radius (px)
-    reach: 6                        // interact distance (blocks)
+    reach: 6,                       // interact distance (blocks)
+    // Cloudcap glider: hold ⬆️ while falling
+    glideFallSpeed: 1.7,            // max descent while gliding (blocks/sec)
+    glideSpeedMul: 1.45             // horizontal boost while gliding
   },
 
   /* -------- progression & rewards -------- */
@@ -46,6 +49,22 @@ var CONFIG = {
     xpBase: 60, xpLinear: 30, xpQuad: 10
   },
 
+  /* -------- grades & subjects (the parent's setup screen) --------
+     A child has one grade; each graded subject gets its own lesson set,
+     "<subject>-<grade>" (reading-3, spelling-3, math-3), seeded from the
+     child's grade and overridable per subject. Non-graded subjects are a
+     single set switched on or off. -------- */
+  GRADES: ["K", "1", "2", "3", "4", "5"],
+  GRADE_LABELS: { K: "Kindergarten", "1": "1st grade", "2": "2nd grade", "3": "3rd grade", "4": "4th grade", "5": "5th grade" },
+  SUBJECTS: [
+    { id: "reading",  label: "Reading",  icon: "📖", graded: true,  weight: 3, defaultOn: true },
+    { id: "spelling", label: "Spelling", icon: "✏️", graded: true,  weight: 3, defaultOn: true },
+    { id: "math",     label: "Math",     icon: "🔢", graded: true,  weight: 2, defaultOn: true },
+    { id: "bible",    label: "Bible",    icon: "📜", cid: "bible1", weight: 2, defaultOn: true,  note: "all ages" },
+    { id: "latin",    label: "Latin",    icon: "🏛️", cid: "latin1", weight: 1, defaultOn: false, note: "intro" }
+  ],
+  DEFAULT_GRADE: "2",               // what a child gets who skips the grown-up step
+
   /* -------- learning: adaptive difficulty tuning -------- */
   LEARN: {
     tierUpWins: 12,                 // clean wins before a tier ramps up
@@ -60,7 +79,10 @@ var CONFIG = {
     // Minimum minutes between challenges, out of the box. Parents change
     // this per child in the Parents area (Assignments tab); children can't.
     defaultPaceMinutes: 0,          // 0 = no enforced gap
-    paceChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30]
+    paceChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30],
+    // clean wins at the TOP tier of a grade set before the Parents area
+    // suggests moving up a grade. Promotion is always a parent's tap.
+    promoteWins: 10
   },
 
   /* -------- speech: how the teacher voice says things --------

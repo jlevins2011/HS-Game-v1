@@ -17,6 +17,11 @@ var Player = (function () {
 
   var move = { x: 0, z: 0 };
   var wantJump = false;
+  var gliding = false;             // Cloudcap: holding ⬆️ while falling
+
+  function hasCloudcap() {
+    return !!(window.Store && Store.data && Store.data.player && Store.data.player.tools.cloudcap);
+  }
 
   function init(cam) { camera = cam; }
 
@@ -60,17 +65,32 @@ var Player = (function () {
     var inWater = !Terrain.inGrotto && water > 0 && Terrain.isWater(pos.x, pos.z) && pos.y < water - 0.15;
 
     var sin = Math.sin(yaw), cos = Math.cos(yaw);
-    var speed = inWater ? M.speed * M.waterSpeedMul : M.speed;
-    var vx = (move.x * cos - move.z * sin) * speed;
-    var vz = (-move.x * sin - move.z * cos) * speed;
+    var speed = inWater ? M.speed * M.waterSpeedMul : (gliding ? M.speed * M.glideSpeedMul : M.speed);
+    var mx = move.x, mz = move.z;
+    // a glider with no stick input drifts forward — jump off a cliff, hold
+    // ⬆️, and you sail; steer by looking
+    if (gliding && !mx && !mz) mz = 0.6;
+    var vx = (mx * cos - mz * sin) * speed;
+    var vz = (-mx * sin - mz * cos) * speed;
 
     if (inWater) {
       vel.y -= M.gravity * 0.25 * dt;
       vel.y = Math.max(vel.y, -2.5);
       if (wantJump) vel.y = 3.2;
+      gliding = false;
     } else {
       vel.y -= M.gravity * dt;
       if (wantJump && onGround) { vel.y = M.jump; onGround = false; GameAudio.sfx.pop(); }
+      // Cloudcap glide: once the jump's rise is spent, holding ⬆️ turns the
+      // fall into a float
+      var canGlide = wantJump && !onGround && vel.y < 0 && hasCloudcap();
+      if (canGlide) {
+        vel.y = Math.max(vel.y, -M.glideFallSpeed);
+        if (!gliding) startGlide();
+      } else if (gliding) {
+        gliding = false;
+        if (window.UI && UI.setJumpGlyph) UI.setJumpGlyph("⬆️");
+      }
     }
 
     // horizontal, axis-separated so we slide along walls
@@ -119,8 +139,9 @@ var Player = (function () {
       else { pos.y = ground; vel.y = 0; onGround = true; }
     }
 
-    // fell off the isle — a friendly wind carries you home
-    if (pos.y < -70) {
+    // fell off the isle — a friendly wind carries you home (a glider
+    // floats slowly, so the wind comes for them sooner)
+    if (pos.y < (gliding ? -28 : -70)) {
       var camp = (window.Build ? Build.campSpot() : null);
       if (camp) spawnAt(camp.x, camp.z);
       else spawnAt(Terrain.CX, Terrain.CZ);
@@ -144,6 +165,17 @@ var Player = (function () {
     // this they aim with the previous frame's camera, which on a slower device
     // makes the build ghost lag behind where the child is actually pointing.
     camera.updateMatrixWorld();
+  }
+
+  function startGlide() {
+    gliding = true;
+    GameAudio.sfx.spark();
+    if (window.UI && UI.setJumpGlyph) UI.setJumpGlyph("🪂");
+    if (window.Store && Store.data && !Store.data.player.glided) {
+      Store.data.player.glided = true;
+      Store.save();
+      if (window.UI && UI.toast) UI.toast("🪂 You're gliding! Hold ⬆️ to float, look to steer.", 3200);
+    }
   }
 
   /* ray helpers for interaction / placement */
@@ -175,6 +207,7 @@ var Player = (function () {
     get position() { return pos; },
     get yaw() { return yaw; },
     get pitch() { return pitch; },
-    get grounded() { return onGround; }
+    get grounded() { return onGround; },
+    get gliding() { return gliding; }
   };
 })();

@@ -7,20 +7,71 @@
 
    Keys:
    - lumen_family_v1          family: profiles, custom curricula,
+                              overrides of built-in sets,
                               assignments, parent settings
    - lumen_save_v1_<profile>  one save per child
+   - *_bak                    the pre-migration copy of either,
+                              written once before a version bump
+                              so a bad migration is recoverable
+
+   Versions: family blob 2, save blob 3. Every earlier version
+   has a migration branch below — an unknown version is never
+   silently replaced with a fresh object.
    ============================================================ */
 var Store = (function () {
   var FAMILY_KEY = "lumen_family_v1";
   var SAVE_PREFIX = "lumen_save_v1_";
+  var FAMILY_VERSION = 2;
+  var SAVE_VERSION = 3;
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  // The pre-migration copy. Written once per key; a second migration on the
+  // same device (there shouldn't be one) must not overwrite the original.
+  function stashBackup(key, raw) {
+    if (!raw) return;
+    var bk = key + "_bak";
+    if (lsGet(bk) === null) lsSet(bk, raw);
+  }
+
+  /* ---------------- grade-leveled set ids ----------------
+     Every graded subject's set is "<subject>-<grade>" (reading-3, math-k).
+     These helpers are the only place that string is built or parsed. */
+  function gradeSetId(subject, grade) {
+    return subject + "-" + String(grade).toLowerCase();
+  }
+  function parseGradeSet(cid) {
+    var m = /^(reading|spelling|math)-(k|[1-5])$/.exec(String(cid || ""));
+    if (!m) return null;
+    return { subject: m[1], grade: m[2] === "k" ? "K" : m[2] };
+  }
+  function nextGrade(grade) {
+    var g = CONFIG.GRADES;
+    var i = g.indexOf(String(grade));
+    return (i >= 0 && i < g.length - 1) ? g[i + 1] : null;
+  }
+
+  // ids from before grade-leveling. math1 was one all-grades set; its item
+  // keys ("7×8") are grade-agnostic, so it lands on the child's own grade.
+  var LEGACY_IDS = { reading2: "reading-2", reading5: "reading-5",
+                     spelling2: "spelling-2", spelling5: "spelling-5" };
+  function remapCid(cid, grade) {
+    if (LEGACY_IDS[cid]) return LEGACY_IDS[cid];
+    if (cid === "math1") return gradeSetId("math", grade || CONFIG.DEFAULT_GRADE);
+    return cid;
+  }
 
   /* ---------------- family data ---------------- */
   function freshFamily() {
     return {
-      version: 1,
-      profiles: [],            // { id, name, emoji, color, band, createdAt }
+      version: FAMILY_VERSION,
+      profiles: [],            // { id, name, emoji, color, grade, setupConfirmed, createdAt }
       custom: [],              // parent-created curricula (same shape as built-ins, single tier)
-      assignments: {},         // profileId -> [ { cid, weight } ]
+      overrides: {},           // cid -> household copy of a built-in set (shadow-copy-on-edit)
+      assignments: {},         // profileId -> [ { cid, weight, enabled, autoGrade } ]
+      promoSnooze: {},         // profileId -> cid -> tierWins when "not yet" was tapped
       settings: {
         pin: null,             // optional 4-digit parent PIN
         emails: [],            // weekly report recipients
@@ -34,59 +85,109 @@ var Store = (function () {
     };
   }
 
-  var family = freshFamily();
-  try {
-    var rawF = localStorage.getItem(FAMILY_KEY);
-    if (rawF) {
-      var pf = JSON.parse(rawF);
-      if (pf && pf.version === 1) {
-        family = Object.assign(freshFamily(), pf);
-        family.settings = Object.assign(freshFamily().settings, pf.settings || {});
-      }
+  function gradeOfProfileIn(fam, pid) {
+    var p = (fam.profiles || []).filter(function (x) { return x.id === pid; })[0];
+    return (p && p.grade) || CONFIG.DEFAULT_GRADE;
+  }
+
+  // v1 → v2: two age bands become a grade; assignment rows gain
+  // enabled/autoGrade; legacy set ids are remapped.
+  function migrateFamilyV1(old) {
+    var fam = Object.assign(freshFamily(), old);
+    fam.version = FAMILY_VERSION;
+    fam.profiles = (old.profiles || []).map(function (p) {
+      var q = Object.assign({}, p);
+      if (!q.grade) q.grade = (p.band === "older") ? "5" : "2";
+      delete q.band;
+      // these children already had assignments a parent could see, so
+      // don't nag for a setup that effectively happened
+      if (q.setupConfirmed === undefined) q.setupConfirmed = true;
+      return q;
+    });
+    fam.assignments = {};
+    Object.keys(old.assignments || {}).forEach(function (pid) {
+      var grade = gradeOfProfileIn(fam, pid);
+      fam.assignments[pid] = (old.assignments[pid] || []).map(function (r) {
+        return { cid: remapCid(r.cid, grade), weight: r.weight, enabled: true, autoGrade: true };
+      });
+    });
+    fam.overrides = old.overrides || {};
+    fam.promoSnooze = old.promoSnooze || {};
+    fam.settings = Object.assign(freshFamily().settings, old.settings || {});
+    return fam;
+  }
+
+  function loadFamilyFromRaw(raw, key) {
+    if (!raw) return freshFamily();
+    var pf = null;
+    try { pf = JSON.parse(raw); } catch (e) { return freshFamily(); }
+    if (!pf || typeof pf !== "object") return freshFamily();
+    if (pf.version === 1) {
+      stashBackup(key, raw);
+      return migrateFamilyV1(pf);
     }
-  } catch (e) { /* corrupted -> fresh */ }
+    if (pf.version === FAMILY_VERSION) {
+      var fam = Object.assign(freshFamily(), pf);
+      fam.settings = Object.assign(freshFamily().settings, pf.settings || {});
+      fam.overrides = pf.overrides || {};
+      fam.promoSnooze = pf.promoSnooze || {};
+      return fam;
+    }
+    // A newer blob than this build understands. Keep it exactly as it is —
+    // never overwrite data we can't read — and work from a fresh copy.
+    stashBackup(key, raw);
+    return freshFamily();
+  }
+
+  var family = loadFamilyFromRaw(lsGet(FAMILY_KEY), FAMILY_KEY);
 
   var famTimer = null;
   function saveFamily() {
     if (famTimer) return;
     famTimer = setTimeout(function () {
       famTimer = null;
-      try { localStorage.setItem(FAMILY_KEY, JSON.stringify(family)); } catch (e) {}
+      lsSet(FAMILY_KEY, JSON.stringify(family));
     }, 200);
   }
+  function saveFamilyNow() { lsSet(FAMILY_KEY, JSON.stringify(family)); }
 
-  function uid() { return "p" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
+  function rand4() { return Math.floor(Math.random() * 1679616).toString(36); }   // 36^4
+  function uid() { return "p" + Date.now().toString(36) + rand4(); }
 
-  // band: "younger" (~grades 1-3) or "older" (~grades 4-6) picks the
-  // starter assignments; parents can change everything afterwards.
-  function defaultAssignments(band) {
-    if (band === "older") {
-      return [
-        { cid: "reading5", weight: 3 },
-        { cid: "spelling5", weight: 3 },
-        { cid: "math1", weight: 2 },
-        { cid: "bible1", weight: 2 }
-      ];
-    }
-    return [
-      { cid: "reading2", weight: 3 },
-      { cid: "spelling2", weight: 2 },
-      { cid: "math1", weight: 2 },
-      { cid: "bible1", weight: 2 }
-    ];
+  /* ---------------- subjects & grade plans ---------------- */
+  function subjectDef(id) {
+    return CONFIG.SUBJECTS.filter(function (s) { return s.id === id; })[0] || null;
+  }
+
+  // the rows a brand-new child of this grade gets
+  function defaultAssignments(grade, plan) {
+    var out = [];
+    CONFIG.SUBJECTS.forEach(function (s) {
+      var sub = plan && plan.subjects && plan.subjects[s.id];
+      var on = sub ? !!sub.enabled : !!s.defaultOn;
+      if (s.graded) {
+        var g = (sub && sub.grade) || grade;
+        out.push({ cid: gradeSetId(s.id, g), weight: s.weight, enabled: on, autoGrade: String(g) === String(grade) });
+      } else if (on || sub) {
+        out.push({ cid: s.cid, weight: s.weight, enabled: on, autoGrade: false });
+      }
+    });
+    return out;
   }
 
   function addProfile(opts) {
+    var grade = String(opts.grade || CONFIG.DEFAULT_GRADE);
     var p = {
       id: uid(),
       name: (opts.name || "Explorer").slice(0, 16),
       emoji: opts.emoji || "🦊",
       color: opts.color || "#5fae6f",
-      band: opts.band || "younger",
+      grade: grade,
+      setupConfirmed: !!opts.setupConfirmed,
       createdAt: Date.now()
     };
     family.profiles.push(p);
-    family.assignments[p.id] = defaultAssignments(p.band);
+    family.assignments[p.id] = defaultAssignments(grade, opts.plan);
     saveFamily();
     return p;
   }
@@ -94,8 +195,106 @@ var Store = (function () {
   function removeProfile(pid) {
     family.profiles = family.profiles.filter(function (p) { return p.id !== pid; });
     delete family.assignments[pid];
+    delete family.promoSnooze[pid];
+    if (family.settings.paceByChild) delete family.settings.paceByChild[pid];
     saveFamily();
-    try { localStorage.removeItem(SAVE_PREFIX + pid); } catch (e) {}
+    lsDel(SAVE_PREFIX + pid);
+    lsDel(SAVE_PREFIX + pid + "_bak");
+  }
+
+  function profile(pid) {
+    return family.profiles.filter(function (p) { return p.id === pid; })[0] || null;
+  }
+
+  function assignmentsFor(pid) {
+    if (!family.assignments[pid]) family.assignments[pid] = [];
+    // older rows may lack the flags; treat missing as on / in sync
+    family.assignments[pid].forEach(function (r) {
+      if (r.enabled === undefined) r.enabled = true;
+      if (r.autoGrade === undefined) r.autoGrade = !!parseGradeSet(r.cid);
+    });
+    return family.assignments[pid];
+  }
+
+  // { grade, subjects: { reading:{grade,enabled,weight}, ..., bible:{enabled,weight}, latin:{...} } }
+  function gradePlanFor(pid) {
+    var p = profile(pid);
+    var rows = assignmentsFor(pid);
+    var plan = { grade: (p && p.grade) || CONFIG.DEFAULT_GRADE, subjects: {} };
+    CONFIG.SUBJECTS.forEach(function (s) {
+      if (s.graded) {
+        var mine = rows.filter(function (r) { var g = parseGradeSet(r.cid); return g && g.subject === s.id; });
+        var pick = mine.filter(function (r) { return r.enabled; })[0] || mine[0];
+        var g = pick ? parseGradeSet(pick.cid).grade : plan.grade;
+        plan.subjects[s.id] = { grade: g, enabled: !!(pick && pick.enabled), weight: pick ? pick.weight : s.weight,
+                               autoGrade: pick ? pick.autoGrade !== false : true };
+      } else {
+        var row = rows.filter(function (r) { return r.cid === s.cid; })[0];
+        plan.subjects[s.id] = { enabled: !!(row && row.enabled), weight: row ? row.weight : s.weight };
+      }
+    });
+    return plan;
+  }
+
+  // Rewrites the built-in subject rows to match a plan. Custom and imported
+  // sets are left exactly as they are.
+  function applyGradePlan(pid, plan) {
+    var p = profile(pid);
+    if (!p) return;
+    var grade = String(plan.grade || p.grade || CONFIG.DEFAULT_GRADE);
+    p.grade = grade;
+    p.setupConfirmed = true;
+    var rows = assignmentsFor(pid);
+    var kept = [];
+    CONFIG.SUBJECTS.forEach(function (s) {
+      var sub = (plan.subjects && plan.subjects[s.id]) || {};
+      if (s.graded) {
+        var old = rows.filter(function (r) { var g = parseGradeSet(r.cid); return g && g.subject === s.id; });
+        var prev = old.filter(function (r) { return r.enabled; })[0] || old[0];
+        var g = String(sub.grade || grade);
+        var weight = sub.weight || (prev ? prev.weight : s.weight);
+        var enabled = sub.enabled === undefined ? (prev ? !!prev.enabled : !!s.defaultOn) : !!sub.enabled;
+        kept.push({ cid: gradeSetId(s.id, g), weight: weight, enabled: enabled, autoGrade: g === grade });
+      } else {
+        var row = rows.filter(function (r) { return r.cid === s.cid; })[0];
+        var on = sub.enabled === undefined ? (row ? !!row.enabled : !!s.defaultOn) : !!sub.enabled;
+        kept.push({ cid: s.cid, weight: sub.weight || (row ? row.weight : s.weight), enabled: on, autoGrade: false });
+      }
+    });
+    var others = rows.filter(function (r) {
+      if (parseGradeSet(r.cid)) return false;
+      return !CONFIG.SUBJECTS.some(function (s) { return s.cid === r.cid; });
+    });
+    family.assignments[pid] = kept.concat(others);
+    saveFamily();
+    return family.assignments[pid];
+  }
+
+  // Move one graded subject up a grade. Returns the new cid, or null at the top.
+  function promote(pid, cid) {
+    var g = parseGradeSet(cid);
+    var p = profile(pid);
+    if (!g || !p) return null;
+    var nxt = nextGrade(g.grade);
+    if (!nxt) return null;
+    var rows = assignmentsFor(pid);
+    var row = rows.filter(function (r) { return r.cid === cid; })[0];
+    var target = gradeSetId(g.subject, nxt);
+    if (row) { row.cid = target; row.autoGrade = String(nxt) === String(p.grade); }
+    else rows.push({ cid: target, weight: subjectDef(g.subject).weight, enabled: true, autoGrade: false });
+    if (family.promoSnooze[pid]) delete family.promoSnooze[pid][cid];
+    saveFamily();
+    return target;
+  }
+
+  function snoozePromotion(pid, cid, tierWins) {
+    if (!family.promoSnooze[pid]) family.promoSnooze[pid] = {};
+    family.promoSnooze[pid][cid] = tierWins || 0;
+    saveFamily();
+  }
+  function promotionSnoozedAt(pid, cid) {
+    var s = family.promoSnooze[pid];
+    return s && s[cid] !== undefined ? s[cid] : null;
   }
 
   /* -------- question pacing (parent-controlled) -------- */
@@ -124,22 +323,44 @@ var Store = (function () {
     return v;
   }
 
-  function assignmentsFor(pid) {
-    if (!family.assignments[pid]) family.assignments[pid] = [];
-    return family.assignments[pid];
-  }
-
-  /* -------- curricula lookup: built-in + custom -------- */
-  function allCurricula() {
-    return (window.BUILTIN_CURRICULA || []).concat(family.custom);
-  }
-  function curriculum(cid) {
-    var all = allCurricula();
-    for (var i = 0; i < all.length; i++) if (all[i].id === cid) return all[i];
+  /* -------- curricula lookup: built-in (through any household override) + custom -------- */
+  function builtins() { return window.BUILTIN_CURRICULA || []; }
+  function baseCurriculum(cid) {
+    var b = builtins();
+    for (var i = 0; i < b.length; i++) if (b[i].id === cid) return b[i];
     return null;
   }
+  function isOverridden(cid) { return !!(family.overrides && family.overrides[cid]); }
+  function allCurricula() {
+    var out = builtins().map(function (c) { return family.overrides[c.id] || c; });
+    return out.concat(family.custom);
+  }
+  function curriculum(cid) {
+    if (family.overrides[cid]) return family.overrides[cid];
+    for (var i = 0; i < family.custom.length; i++) if (family.custom[i].id === cid) return family.custom[i];
+    return baseCurriculum(cid);
+  }
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  // The object an editor may mutate: a custom set itself, or a household
+  // copy of a built-in under the SAME id (so mastery keyed by cid survives).
+  function editableCopy(cid) {
+    for (var i = 0; i < family.custom.length; i++) if (family.custom[i].id === cid) return family.custom[i];
+    if (!family.overrides[cid]) {
+      var base = baseCurriculum(cid);
+      if (!base) return null;
+      var copy = clone(base);
+      copy.customized = true;
+      family.overrides[cid] = copy;
+    }
+    return family.overrides[cid];
+  }
+  function commitEdit(cid) { saveFamily(); return curriculum(cid); }
+  function clearOverride(cid) { delete family.overrides[cid]; saveFamily(); }
+
   function addCustomCurriculum(cur) {
-    cur.id = "c" + Date.now().toString(36);
+    cur.id = "c" + Date.now().toString(36) + rand4();
     cur.custom = true;
     family.custom.push(cur);
     saveFamily();
@@ -156,13 +377,13 @@ var Store = (function () {
   /* ---------------- per-child save ---------------- */
   function freshData() {
     return {
-      version: 2,
+      version: SAVE_VERSION,
       player: {
         xp: 0, level: 1, sparks: 0,
         toolTier: 0,               // mallet: 0 timber, 1 stone, 2 skysteel, 3 starstone
         isle: "meadowmere",
         inventory: {},             // itemName -> count
-        tools: {},                 // hatchet/brush/kiln/lanternkit + legendary
+        tools: {},                 // hatchet/brush/kiln/lanternkit/cloudcap + legendary
         seeds: {}
       },
       elder: { wins: 0 },          // Elder Alder super-challenge wins
@@ -187,9 +408,10 @@ var Store = (function () {
     };
   }
 
-  // carry a v1 (voxel-era) save's progress into the new world format
+  // carry a v1 (voxel-era) save's progress into the v2 world format
   function migrateV1(old) {
     var d = freshData();
+    d.version = 2;
     if (old.player) {
       ["xp", "level", "sparks", "toolTier", "isle"].forEach(function (k) {
         if (old.player[k] !== undefined) d.player[k] = old.player[k];
@@ -209,8 +431,56 @@ var Store = (function () {
     return d;
   }
 
+  // v2 → v3: learning records move to the grade-leveled set ids. Existing
+  // records under the new id (if any) win; the old ones fill in the gaps.
+  function migrateSaveV2(d, grade) {
+    var learn = d.learn || (d.learn = { tiers: {}, mastery: {} });
+    var tiers = {}, mastery = {};
+    Object.keys(learn.tiers || {}).forEach(function (cid) {
+      var to = remapCid(cid, grade);
+      if (!tiers[to] || to === cid) tiers[to] = learn.tiers[cid];
+    });
+    Object.keys(learn.mastery || {}).forEach(function (cid) {
+      var to = remapCid(cid, grade);
+      var src = learn.mastery[cid];
+      if (!mastery[to]) { mastery[to] = src; return; }
+      Object.keys(src).forEach(function (itemKey) {
+        if (!mastery[to][itemKey]) mastery[to][itemKey] = src[itemKey];
+        else Object.keys(src[itemKey]).forEach(function (sk) {
+          if (!mastery[to][itemKey][sk]) mastery[to][itemKey][sk] = src[itemKey][sk];
+        });
+      });
+    });
+    learn.tiers = tiers;
+    learn.mastery = mastery;
+    d.version = SAVE_VERSION;
+    return d;
+  }
+
+  // raw JSON -> a save at the current version (or null if unreadable).
+  // `key` enables the pre-migration backup; omit it for a read-only peek.
+  function normalizeSave(raw, prof, key) {
+    if (!raw) return null;
+    var parsed = null;
+    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+    if (!parsed || typeof parsed !== "object") return null;
+    var grade = (prof && prof.grade) || CONFIG.DEFAULT_GRADE;
+    if (parsed.version === SAVE_VERSION) return deepMergeDefaults(freshData(), parsed);
+    if (parsed.version === 2) {
+      if (key) stashBackup(key, raw);
+      return deepMergeDefaults(freshData(), migrateSaveV2(parsed, grade));
+    }
+    if (parsed.version === 1) {
+      if (key) stashBackup(key, raw);
+      return deepMergeDefaults(freshData(), migrateSaveV2(migrateV1(parsed), grade));
+    }
+    // newer than this build: keep it untouched, play on a fresh save
+    if (key) stashBackup(key, raw);
+    return null;
+  }
+
   var data = freshData();
-  var profile = null;
+  var prof = null;
   var activeKey = null;
 
   function deepMergeDefaults(fresh, saved) {
@@ -225,19 +495,11 @@ var Store = (function () {
   }
 
   function load(p) {
-    profile = p;
+    prof = p;
     activeKey = SAVE_PREFIX + p.id;
-    data = freshData();
-    try {
-      var raw = localStorage.getItem(activeKey);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (parsed && parsed.version === 2) data = deepMergeDefaults(freshData(), parsed);
-        else if (parsed && parsed.version === 1) data = migrateV1(parsed);
-      }
-    } catch (e) { /* corrupted -> fresh */ }
+    data = normalizeSave(lsGet(activeKey), p, activeKey) || freshData();
     Store.data = data;
-    Store.profile = profile;
+    Store.profile = prof;
   }
 
   var saveTimer = null;
@@ -245,38 +507,29 @@ var Store = (function () {
     if (saveTimer || !activeKey) return;
     saveTimer = setTimeout(function () {
       saveTimer = null;
-      try { localStorage.setItem(activeKey, JSON.stringify(data)); } catch (e) {}
+      lsSet(activeKey, JSON.stringify(data));
     }, 250);
   }
 
   function saveNow() {
     if (!activeKey) return;
-    try { localStorage.setItem(activeKey, JSON.stringify(data)); } catch (e) {}
+    lsSet(activeKey, JSON.stringify(data));
   }
 
   function reset(pid) {
     var key = SAVE_PREFIX + pid;
-    try { localStorage.removeItem(key); } catch (e) {}
+    lsDel(key);
     if (activeKey === key) { data = freshData(); Store.data = data; }
   }
 
   function peek(p) {
-    try {
-      var raw = localStorage.getItem(SAVE_PREFIX + p.id);
-      if (raw) {
-        var d = JSON.parse(raw);
-        return { level: d.player.level, sparks: d.player.sparks };
-      }
-    } catch (e) {}
-    return null;
+    var d = peekSave(p);
+    return d ? { level: d.player.level, sparks: d.player.sparks } : null;
   }
 
   function peekSave(p) {
-    try {
-      var raw = localStorage.getItem(SAVE_PREFIX + p.id);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return null;
+    if (!p) return null;
+    return normalizeSave(lsGet(SAVE_PREFIX + p.id), p, null);
   }
 
   function isleState(isleId) {
@@ -299,10 +552,11 @@ var Store = (function () {
   function importAll(json) {
     var bundle = JSON.parse(json);
     if (!bundle || bundle.app !== "lumen-isles" || !bundle.family) throw new Error("Not a Lumen Isles backup file");
-    family = Object.assign(freshFamily(), bundle.family);
-    try { localStorage.setItem(FAMILY_KEY, JSON.stringify(family)); } catch (e) {}
+    // an older backup goes through the same migrations as an older device
+    family = loadFamilyFromRaw(JSON.stringify(bundle.family), FAMILY_KEY + "_import");
+    saveFamilyNow();
     Object.keys(bundle.saves || {}).forEach(function (pid) {
-      try { localStorage.setItem(SAVE_PREFIX + pid, JSON.stringify(bundle.saves[pid])); } catch (e) {}
+      lsSet(SAVE_PREFIX + pid, JSON.stringify(bundle.saves[pid]));
     });
     Store.family = family;
     return family.profiles.length;
@@ -310,15 +564,19 @@ var Store = (function () {
 
   return {
     family: family, saveFamily: saveFamily,
-    addProfile: addProfile, removeProfile: removeProfile,
+    addProfile: addProfile, removeProfile: removeProfile, profileById: profile,
     assignmentsFor: assignmentsFor, defaultAssignments: defaultAssignments,
+    gradeSetId: gradeSetId, parseGradeSet: parseGradeSet, nextGrade: nextGrade, subjectDef: subjectDef,
+    gradePlanFor: gradePlanFor, applyGradePlan: applyGradePlan,
+    promote: promote, snoozePromotion: snoozePromotion, promotionSnoozedAt: promotionSnoozedAt,
     paceMinutes: paceMinutes, setPaceMinutes: setPaceMinutes,
-    allCurricula: allCurricula, curriculum: curriculum,
+    allCurricula: allCurricula, curriculum: curriculum, baseCurriculum: baseCurriculum,
+    isOverridden: isOverridden, editableCopy: editableCopy, commitEdit: commitEdit, clearOverride: clearOverride,
     addCustomCurriculum: addCustomCurriculum, removeCustomCurriculum: removeCustomCurriculum,
     load: load, save: save, saveNow: saveNow, reset: reset, peek: peek, peekSave: peekSave,
     isleState: isleState,
     exportAll: exportAll, importAll: importAll,
-    data: data, profile: profile
+    data: data, profile: prof
   };
 })();
 

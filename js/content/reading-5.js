@@ -9,7 +9,7 @@
 window.BUILTIN_CURRICULA = window.BUILTIN_CURRICULA || [];
 
 BUILTIN_CURRICULA.push({
-  id: "reading5", name: "Reading · Grade 5", subject: "reading", grade: "5",
+  id: "reading-5", name: "Reading · Grade 5", subject: "reading", grade: "5",
   icon: "📚",
   desc: "Rich vocabulary with meanings and fill-in sentences for stronger readers.",
   tiers: [
