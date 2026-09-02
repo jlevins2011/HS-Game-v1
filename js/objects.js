@@ -254,6 +254,163 @@ var Objects = (function () {
     return mesh;
   }
 
+  /* ============ the Skydock balloon ============
+     A real basket you walk into up a ramp. Tap the balloon while aboard:
+     with a Cloudcap it climbs high so the child can jump out and glide
+     home; without one it does a little hop. It comes back down on its own
+     as soon as the rider leaves. The deck is a moving platform the player
+     stands on (see platformAt / riding). */
+  var DECK_HW = 2.5, DECK_HL = 6.4;          // deck half-width / half-length
+  var RAMP_Z0 = -10.6, RAMP_Z1 = -DECK_HL;   // ramp runs toward the dock (-z)
+
+  function dynAirship(o) {
+    var B = CONFIG.BALLOON;
+    var g = new Geo.Builder();
+    var deck = B.deck;
+    // landing legs + hull under the deck
+    g.cyl(2.4, 3.0, 1.2, 10, 0x96714a, { y: 0.35, sz: 2.2 }, 0.25, 0.1);
+    g.cyl(3.0, 2.5, 0.9, 10, 0xa8815a, { y: 1.3, sz: 2.2 }, 0.25, 0.1);
+    g.box(DECK_HW * 2 + 0.4, 0.3, DECK_HL * 2 + 0.2, 0xc59a63, { y: deck - 0.15 }, 0.2);
+    // railings and the little cabin
+    g.box(0.18, 0.8, DECK_HL * 2 - 0.4, 0x7c5a39, { x: -DECK_HW - 0.1, y: deck + 0.4 }, 0.2);
+    g.box(0.18, 0.8, DECK_HL * 2 - 0.4, 0x7c5a39, { x: DECK_HW + 0.1, y: deck + 0.4 }, 0.2);
+    g.box(DECK_HW * 2 + 0.4, 0.8, 0.18, 0x7c5a39, { y: deck + 0.4, z: DECK_HL + 0.05 }, 0.2);
+    g.box(3.4, 2.2, 3.2, 0xb08c5c, { y: deck + 1.1, z: 3.2 }, 0.2);
+    g.box(3.6, 0.5, 3.6, 0xe05e5e, { y: deck + 2.4, z: 3.2 }, 0.15);
+    // the balloon
+    g.blob(4.6, 0xe05e5e, { y: deck + 6.6, sz: 1.8, sy: 0.85 }, 0.2, 0.12);
+    g.blob(4.62, 0xf2eee2, { y: deck + 6.55, sz: 1.75, sy: 0.8, sx: 0.35 }, 0.15, 0.1);
+    for (var rr = -1; rr <= 1; rr += 2) {
+      g.cyl(0.05, 0.05, 5.2, 3, 0x5e4429, { x: rr * 2.4, y: deck + 0.4, z: 4, rz: rr * 0.5 }, 0, 0);
+      g.cyl(0.05, 0.05, 5.2, 3, 0x5e4429, { x: rr * 2.4, y: deck + 0.4, z: -1, rz: rr * 0.5 }, 0, 0);
+    }
+    var ship = g.build();
+    // the boarding ramp is its own mesh: it stays on the ground when the ship flies
+    var rg = new Geo.Builder();
+    var rl = RAMP_Z1 - RAMP_Z0, rise = deck - 0.1;
+    rg.box(2.6, 0.24, Math.hypot(rl, rise), 0xa8815a,
+      { y: 0.1 + rise / 2, z: (RAMP_Z0 + RAMP_Z1) / 2, rx: -Math.atan2(rise, rl) }, 0.15);
+    rg.cyl(0.14, 0.12, 0.9, 5, 0x7c5a39, { x: -1.4, y: 0, z: RAMP_Z0 + 0.6 }, 0.2, 0);
+    rg.cyl(0.14, 0.12, 0.9, 5, 0x7c5a39, { x: 1.4, y: 0, z: RAMP_Z0 + 0.6 }, 0.2, 0);
+    var ramp = rg.build();
+    var mesh = new THREE.Group();
+    mesh.add(ship, ramp);
+    mesh.position.set(o.x, o.y, o.z);
+
+    o.base = o.y;            // the ground it rests on
+    o.lift = 0;              // how high it is right now
+    o.dy = 0;                // this frame's vertical move (riders follow it)
+    o.state = "docked";      // docked | rising | aloft | descending
+    o.target = 0;
+    o.away = 0;              // seconds the rider has been off the deck
+    o.anim = function (t) {
+      var bob = o.state === "aloft" ? Math.sin(t * 1.3) * 0.25 : 0;
+      ship.position.y = o.lift + bob;
+      ship.rotation.z = o.state === "docked" ? 0 : Math.sin(t * 0.9) * 0.02;
+      ramp.position.y = -Math.min(o.lift, 0);
+      ramp.visible = o.lift < 0.6;
+    };
+    o.update = function (dt) {
+      dt = Math.min(dt, 0.05);   // same clamp as the player, or a stalled frame leaves the rider behind
+      var prev = o.lift;
+      var pos = window.Player ? Player.position : null;
+      if (o.state === "rising") {
+        o.lift = Math.min(o.target, o.lift + B.riseSpeed * dt);
+        if (o.lift >= o.target) o.state = o.hop ? "descending" : "aloft";
+      } else if (o.state === "descending") {
+        o.lift = Math.max(0, o.lift - B.fallSpeed * dt);
+        if (o.lift <= 0) { o.state = "docked"; o.hop = false; }
+      }
+      // the moment the rider leaves the basket, head home
+      if ((o.state === "rising" || o.state === "aloft") && !o.hop) {
+        if (pos && aboard(o, pos)) o.away = 0; else o.away += dt;
+        if (o.away > 0.35) { o.state = "descending"; o.away = 0; }
+      }
+      o.dy = o.lift - prev;
+      o.y = o.base + o.lift;   // raycast/prompt sphere follows the ship
+    };
+    return mesh;
+  }
+
+  function aboard(o, pos) {
+    var dx = pos.x - o.x, dz = pos.z - o.z;
+    var top = o.y + CONFIG.BALLOON.deck;
+    // a little generous at the ramp lip: standing on the top step counts
+    return Math.abs(dx) <= DECK_HW + 0.2 && Math.abs(dz) <= DECK_HL + 0.6 &&
+           pos.y >= top - 0.6 && pos.y <= top + 2.2;
+  }
+
+  // deck (and, while docked, the ramp) as a walkable surface under (x, z)
+  function airshipTop(o, x, z) {
+    var dx = x - o.x, dz = z - o.z;
+    var B = CONFIG.BALLOON;
+    if (Math.abs(dx) <= DECK_HW + 0.15 && Math.abs(dz) <= DECK_HL + 0.15) return o.y + B.deck;
+    if (o.lift < 0.6 && Math.abs(dx) <= 1.4 && dz >= RAMP_Z0 && dz < RAMP_Z1) {
+      var t = (dz - RAMP_Z0) / (RAMP_Z1 - RAMP_Z0);
+      return o.base + 0.1 + t * (B.deck - 0.1);
+    }
+    return -Infinity;
+  }
+
+  // tap on the balloon (from Game.handleSpecial)
+  function airshipTap(o, pos, hasCloudcap) {
+    var B = CONFIG.BALLOON;
+    if (!aboard(o, pos)) {
+      UI.toast("🎈 Walk up the ramp and hop into the basket first!");
+      return;
+    }
+    if (o.state === "docked") {
+      o.hop = !hasCloudcap;
+      o.target = hasCloudcap ? B.height : B.hopHeight;
+      o.state = "rising";
+      o.away = 0;
+      GameAudio.sfx.spark();
+      if (hasCloudcap) {
+        UI.toast("🎈 Up, up and away! At the top, jump out and hold ⬆️ to glide home!", 3800);
+        GameAudio.say("Up, up and away!");
+        var pl = Store.data.player;
+        if (!pl.flownBalloon) {
+          pl.flownBalloon = true;
+          Game.grantXP(B.firstFlightXP);
+          UI.gainPopup("🎈 First flight! +" + B.firstFlightXP + " light");
+        }
+      } else {
+        UI.toast("🎈 The balloon bobs… With a 🪂 Cloudcap from the Tinker Bench it could carry you to the clouds!", 3800);
+      }
+      return;
+    }
+    if (o.state === "rising" || o.state === "aloft") {
+      o.state = "descending";
+      UI.toast("🎈 Coming back down…");
+      return;
+    }
+    UI.toast("🎈 Landing…");
+  }
+
+  function airshipLabel(o, pos) {
+    if (o.state === "docked") return aboard(o, pos) ? "tap the balloon to lift off!" : "climb the ramp and hop in!";
+    if (o.state === "descending") return "coming in to land";
+    return "jump and glide! (or tap to come down)";
+  }
+
+  /* ============ moving platforms (the balloon deck) ============ */
+  function platformAt(x, z, maxTop) {
+    var best = -Infinity, who = null;
+    for (var i = 0; i < dynamics.length; i++) {
+      var o = dynamics[i];
+      if (o.gone || !o.def.platform) continue;
+      var top = airshipTop(o, x, z);
+      if (top > -Infinity && top <= maxTop && top > best) { best = top; who = o; }
+    }
+    return { top: best, obj: who };
+  }
+  // the platform a player at pos is standing on, if any
+  function riding(pos) {
+    var r = platformAt(pos.x, pos.z, pos.y + 0.3);
+    if (!r.obj || pos.y - r.top > 0.3) return null;
+    return r.obj;
+  }
+
   /* ============ skydock showpiece ============ */
   function buildSkydock(g) {
     var cx = Terrain.CX, cz = Terrain.CZ;
@@ -266,27 +423,7 @@ var Objects = (function () {
       g.cyl(0.18, 0.14, 1.1, 5, 0x7c5a39, { x: cx - 2, y: deckY, z: cz + 10 + pz * 2.2 }, 0.2, 0);
       g.cyl(0.18, 0.14, 1.1, 5, 0x7c5a39, { x: cx + 2, y: deckY, z: cz + 10 + pz * 2.2 }, 0.2, 0);
     }
-    // THE AIRSHIP moored at the end, floating over open sky
-    var ax = cx, ay = deckY + 1.2, az = cz + 42;
-    // hull: fat lens shape from stacked cyl
-    g.cyl(2.6, 3.2, 2.2, 10, 0x96714a, { x: ax, y: ay - 2.2, z: az, sz: 2.2 }, 0.25, 0.1);
-    g.cyl(3.2, 2.4, 1.6, 10, 0xa8815a, { x: ax, y: ay, z: az, sz: 2.2 }, 0.25, 0.1);
-    g.box(5.4, 0.3, 13, 0xc59a63, { x: ax, y: ay + 1.5, z: az }, 0.2);
-    // railings + cabin
-    g.box(0.18, 0.8, 12.6, 0x7c5a39, { x: ax - 2.6, y: ay + 1.8, z: az }, 0.2);
-    g.box(0.18, 0.8, 12.6, 0x7c5a39, { x: ax + 2.6, y: ay + 1.8, z: az }, 0.2);
-    g.box(3.4, 2.2, 3.2, 0xb08c5c, { x: ax, y: ay + 1.8, z: az - 3.6 }, 0.2);
-    g.box(3.6, 0.5, 3.6, 0xe05e5e, { x: ax, y: ay + 4.0, z: az - 3.6 }, 0.15);
-    // balloon
-    g.blob(4.6, 0xe05e5e, { x: ax, y: ay + 6.4, z: az, sz: 1.8, sy: 0.85 }, 0.2, 0.12);
-    g.blob(4.62, 0xf2eee2, { x: ax, y: ay + 6.35, z: az, sz: 1.75, sy: 0.8, sx: 0.35 }, 0.15, 0.1);
-    // ropes
-    for (var rr = -1; rr <= 1; rr += 2) {
-      g.cyl(0.05, 0.05, 5.2, 3, 0x5e4429, { x: ax + rr * 2.4, y: ay + 1.8, z: az + 4, rz: rr * 0.5 }, 0, 0);
-      g.cyl(0.05, 0.05, 5.2, 3, 0x5e4429, { x: ax + rr * 2.4, y: ay + 1.8, z: az - 1, rz: rr * 0.5 }, 0, 0);
-    }
-    // mooring rope to dock
-    g.cyl(0.06, 0.06, 6.5, 3, 0x8a6540, { x: cx, y: deckY + 0.6, z: cz + 35.5, rx: Math.PI / 2.6 }, 0, 0);
+    // (the airship itself is a dynamic object — see dynAirship — so it can fly)
     // lookout tower by the dock
     var tx = cx + 10, tz = cz + 12, ty = Terrain.heightAt(tx, tz);
     g.cyl(1.4, 1.1, 7, 6, 0xc26a4a, { x: tx, y: ty, z: tz }, 0.25, 0.15);
@@ -337,7 +474,8 @@ var Objects = (function () {
     spring:      { name: "Lightspring", icon: "⛲", dynamic: dynSpring, rayR: 2.2, rayY: 1.0, special: "spring", solid: 1.6 },
     grottodoor:  { name: "Sealed Grotto", icon: "🚪", dynamic: dynDoor, rayR: 2.0, rayY: 1.0, special: "grottodoor", solid: 1.4 },
     grottoexit:  { name: "Way Out", icon: "🌤️", dynamic: dynExit, rayR: 1.6, rayY: 1.4, special: "grottoexit" },
-    anchor:      { name: "Bridge Anchor", icon: "🪢", dynamic: dynAnchor, rayR: 1.2, rayY: 1.5, special: "anchor" }
+    anchor:      { name: "Bridge Anchor", icon: "🪢", dynamic: dynAnchor, rayR: 1.2, rayY: 1.5, special: "anchor" },
+    airship:     { name: "Sky Balloon", icon: "🎈", dynamic: dynAirship, rayR: 6.0, rayY: 6.5, special: "airship", platform: true }
   };
 
   /* ============ placement ============ */
@@ -394,6 +532,12 @@ var Objects = (function () {
       if (opts.avoidZones && zone && !zone.restored) continue;
       // keep the arrival meadow clear — nothing spawns on top of the player
       if (Math.hypot(x - Terrain.CX, z - Terrain.CZ) < 9) continue;
+      // on the Skydock, keep the dock and the balloon's berth (deck + ramp) clear
+      if (Terrain.def.id === "skydock") {
+        var sx = x - Terrain.CX, sz = z - Terrain.CZ;
+        if (Math.abs(sx) < 4 && sz > 7 && sz < 37) continue;          // the dock planks
+        if (Math.abs(sx) < 6.5 && sz > 42 - 13 && sz < 42 + 9) continue; // the airship and its ramp
+      }
       // keep some clear space between solid things
       if (TYPES[type].solid && tooClose(x, z, 2.4)) continue;
       var o = add(type, x, z, { zone: zone, variant: opts.variant !== undefined ? opts.variant : (rng() < 0.5 ? 1 : 0) });
@@ -435,6 +579,7 @@ var Objects = (function () {
       var g = new Geo.Builder();
       buildSkydock(g);
       regionGroup.add(g.build());
+      add("airship", Terrain.CX, Terrain.CZ + 42, {});
       scatter("tree", 14, rng, {}); scatter("flower", 16, rng, { variant: 0 });
       scatter("rock", 6, rng, {});
       scatter("wonderstone", 2, rng, {}); scatter("chest", 1, rng, {});
@@ -693,7 +838,9 @@ var Objects = (function () {
   var regrowTimer = 0;
   function tick(dt, tSec) {
     for (var i = 0; i < dynamics.length; i++) {
-      if (!dynamics[i].gone && dynamics[i].anim) dynamics[i].anim(tSec);
+      if (dynamics[i].gone) continue;
+      if (dynamics[i].update) dynamics[i].update(dt);
+      if (dynamics[i].anim) dynamics[i].anim(tSec);
     }
     regrowTimer += dt;
     if (regrowTimer < 5) return;
@@ -751,6 +898,7 @@ var Objects = (function () {
     init: init, populate: populate, tick: tick,
     raycast: raycast, hit: hit, remove: remove, reviveZone: reviveZone,
     collidersNear: collidersNear, dynamicByType: dynamicByType,
+    platformAt: platformAt, riding: riding, aboard: aboard, airshipTap: airshipTap, airshipLabel: airshipLabel,
     setGrottoVisibility: setGrottoVisibility,
     byId: function (id) { return byId[id]; },
     TYPES: TYPES

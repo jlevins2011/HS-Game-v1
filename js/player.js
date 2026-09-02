@@ -41,10 +41,15 @@ var Player = (function () {
   }
 
   // walkable ground at (x,z) considering terrain and structure floors
+  var ridingLast = false;          // stood on a moving platform last frame
   function groundAt(x, z, refY) {
     var g = Terrain.heightAt(x, z);
     var b = (window.Build ? Build.floorTopAt(x, z, refY + STEP) : -Infinity);
-    return Math.max(g, b);
+    // a deck you are already riding may climb faster than a step per frame;
+    // stay with it instead of dropping through
+    var reach = ridingLast ? 3 : STEP;
+    var pf = (window.Objects && Objects.platformAt) ? Objects.platformAt(x, z, refY + reach).top : -Infinity;
+    return Math.max(g, b, pf);
   }
 
   function tryAxis(nx, nz) {
@@ -128,6 +133,13 @@ var Player = (function () {
     // world border
     pos.x = Math.max(1, Math.min(Terrain.SX - 1, pos.x));
     pos.z = Math.max(1, Math.min(Terrain.SZ - 1, pos.z));
+
+    // riding a moving platform (the balloon): a rising deck lifts you via
+    // the ground snap below; a sinking one has to pull you down with it or
+    // you'd hop along the whole way
+    var plat = (onGround && window.Objects && Objects.riding) ? Objects.riding(pos) : null;
+    if (plat && plat.dy < 0) pos.y += plat.dy;
+    ridingLast = !!plat;
 
     // vertical
     onGround = false;

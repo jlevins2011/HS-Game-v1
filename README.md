@@ -58,6 +58,9 @@ satchel, 🛠️ opens build mode.
   stays how you left it). For a roof, stand in your house and look up — the
   roof caps whatever is on the tile. Taking a piece back refunds its materials
 - **🔮 Wonderstones** and **🧰 curio chests** hold challenges with spark + loot rewards
+- **🎈 The Skydock balloon**: walk up the ramp into the basket and tap the balloon.
+  With a Cloudcap it climbs high into the sky — jump out at the top and glide home.
+  Without one it just bobs. It floats back down to the dock the moment you leave
 - **🪂 Cloudcap**: tinker one from fluff, feathers and timber, then **hold ⬆️ while
   falling to glide** — sail off a cliff to a satellite islet, chase a Starfall
   mid-air, look where you want to go. Let go to drop

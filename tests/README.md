@@ -22,6 +22,7 @@ and the repo served on port 8905:
     node tests/test-editor.js
     node tests/test-glider.js
     node tests/test-nudge.js
+    node tests/test-balloon.js
     node tests/test-letters.js
     node tests/test-spell-live.js
 
@@ -66,6 +67,10 @@ can run in any order.
   parent-set time without a question a wishing star brings one, answering it is
   rewarded and resets the clock; Off means no stars; the clock survives a reload with
   a minute of grace; an older "pacing" value carries over as the timer.
+- `test-balloon.js` — the Skydock balloon: the ramp is walkable onto the deck; without
+  a Cloudcap a tap only hops; with one it climbs to the sky with the rider carried on
+  the deck, first flight is rewarded, the prompt changes, stepping off starts it home
+  while the child glides, it lands by itself, and tapping from the ground only hints.
 - `test-letters.js` — the letter-name table, per-device overrides that stay out of
   the family backup, queue-vs-interrupt, and the Voice check screen.
 - `test-spell-live.js` — taps real letter tiles in a real spelling challenge.

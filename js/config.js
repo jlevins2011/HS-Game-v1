@@ -14,7 +14,7 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.3.0",
+    version: "2.4.0",
     built: "2026-09-02",
     currencyName: "sparks",
     currencyIcon: "✨",
@@ -122,6 +122,16 @@ var CONFIG = {
     // does with the words most likely to come out wrong
     checkWords: ["read", "live", "bow", "wind", "tear", "lead", "close",
                  "minute", "aqua", "terra", "Bethlehem", "Nazareth"]
+  },
+
+  /* -------- the Skydock balloon -------- */
+  BALLOON: {
+    height: 48,                     // how high it climbs with a Cloudcap aboard (blocks)
+    hopHeight: 4,                   // the little bob it does without one
+    riseSpeed: 3.6,                 // blocks/sec going up
+    fallSpeed: 3.0,                 // blocks/sec coming back down
+    deck: 2.0,                      // deck height above the ground it rests on
+    firstFlightXP: 12
   },
 
   /* -------- world / creature pacing -------- */
