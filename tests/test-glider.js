@@ -63,6 +63,17 @@ const pw = require('playwright-core');
   await page.evaluate(()=>UI.closeOverlay());
   ck('the satchel names it once earned', await page.evaluate(()=>{ Store.data.player.tools.cloudcap = true; UI.showInventory(); const t=/Cloudcap/.test(document.getElementById('overlay-card').textContent); UI.closeOverlay(); return t; }));
 
+  // the bench must appear from gathering alone, and on a fresh load with materials already in the satchel
+  await page.evaluate(()=>{ const p=Store.data.player; p.tools.cloudcap=false; p.toolTier=0; p.tools.hatchet=true; p.tools.brush=true; p.inventory={}; UI.updateHotbar(); });
+  await page.evaluate(()=>{ Game.grantItem('fluff',4); Game.grantItem('feather',2); Game.grantItem('timber',2); });
+  ck('gathering the last material lights up TINKER! without any other action',
+     await page.evaluate(()=>getComputedStyle(document.getElementById('btn-craft')).display==='block' && document.getElementById('btn-craft').textContent==='🔧 TINKER!'));
+  await page.evaluate(()=>{ Store.saveNow(); });
+  await page.reload({waitUntil:'load'}); await page.waitForTimeout(1200);
+  const pb=(await page.$$('#player-buttons button'))[0]; const pbb=await pb.boundingBox(); await tap(pbb.x+pbb.width/2,pbb.y+pbb.height/2); await page.waitForTimeout(2800);
+  ck('after a reload the bench is visible immediately, before gathering anything',
+     await page.evaluate(()=>getComputedStyle(document.getElementById('btn-craft')).display==='block'));
+
   console.log('page errors:', errs.length?errs:'none');
   const bad=R.filter(r=>!r.ok);
   console.log('\n'+(bad.length?'FAILURES: '+bad.map(r=>r.n).join(' | '):'ALL '+R.length+' GLIDER CHECKS PASSED'));

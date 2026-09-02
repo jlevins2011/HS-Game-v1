@@ -99,6 +99,7 @@ var Game = (function () {
     Controls.setEnabled(true);
     UI.updateHud();
     UI.updateQuestHud();
+    UI.updateHotbar();   // a child who loads in with materials sees the bench right away
     Reports.maybeAutoSend();
   }
 
@@ -140,7 +141,9 @@ var Game = (function () {
     inv[item] = (inv[item] || 0) + count;
     Store.save();
     UI.updateQuestHud();
-    UI.updateBuildSheet();
+    // build sheet AND the Tinker/Kiln buttons — gathering is exactly when a
+    // recipe becomes affordable, and this was the refresh the redesign lost
+    UI.updateHotbar();
   }
 
   /* ---------------- interaction ---------------- */
@@ -720,7 +723,7 @@ var Game = (function () {
     if (gardenTimer > 4) { gardenTimer = 0; Garden.tick(); }
 
     statTimer += dt;
-    if (statTimer > 5) { statTimer = 0; Stats.tickPlaytime(); Store.save(); }
+    if (statTimer > 5) { statTimer = 0; Stats.tickPlaytime(); Store.save(); UI.updateHotbar(); }
 
     renderer.render(scene, camera);
   }
