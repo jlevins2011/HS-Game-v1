@@ -73,7 +73,8 @@ satchel, 🛠️ opens build mode.
 - Creatures (tuftles, puffbirds, shellhoppers, glowmoths) play chase and
   leave gifts; the brush collects tuftle fluff without the chase
 - Go quiet on learning for a while and **🌠 STARFALL** tumbles from the sky —
-  answer the wishing star's riddle to catch the sparks
+  answer the wishing star's riddle to catch the sparks (parents set how long
+  "a while" is, per child)
 - New isles unlock with levels: Meadowmere → Ambershore → Frostspire →
   Mossveil → Starfen
 
@@ -110,16 +111,14 @@ set a 4-digit PIN there.
   its weight) and a weight 1–5 sets how often it appears in play. Bible weighting
   is simply the weight on the Bible set. Multiple sets per child and one set for
   multiple children both work; grades themselves are chosen in Explorers → Edit setup.
-  This tab also holds **⏳ Question pacing** — the shortest time that may
-  pass between one challenge and the next (Off, or 1–30 minutes), set per
-  child, with a one-tap "use this for every explorer". Wonderstones, curio
-  chests, Starfalls and Elder Alder all wait it out and tell the child in
-  world language why ("the wonderstone is still gathering light — try again
-  in about 5 minutes"). Crafting is never blocked; it just proceeds without
-  a question, so the game can't stall. The setting lives in parent settings,
-  not in a child's save: it can't be reached from any child-facing screen,
-  and reloading the game or resetting progress does not clear it or hand out
-  a free question.
+  This tab also holds the **🌠 Question timer** — the *longest* a child may play
+  without a question (Off, or 1–30 minutes), set per child, with a one-tap "use
+  this for every explorer". When it runs out, a wishing star falls from the sky
+  with a challenge — part of the game and rewarded like any other — and any
+  question they answer on their own resets the clock. Questions are never held
+  back: wonderstones and chests open whenever they're found. The setting lives in
+  parent settings, not in a child's save: it can't be reached from any child-facing
+  screen, and reloading the game doesn't restart the clock.
 - **Reports & Settings** — weekly family email reports, on-screen report
   preview, **backup export/restore** (a JSON file — protects against cleared
   browser data and moves progress to a new device), parent PIN.

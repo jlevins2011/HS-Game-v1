@@ -21,6 +21,7 @@ and the repo served on port 8905:
     node tests/test-setup.js
     node tests/test-editor.js
     node tests/test-glider.js
+    node tests/test-nudge.js
     node tests/test-letters.js
     node tests/test-spell-live.js
 
@@ -61,6 +62,10 @@ can run in any order.
 - `test-glider.js` — Cloudcap: falls normally without it, floats with it while ⬆️ is
   held, drops when released, the real button swaps to 🪂 mid-air, the one-time hint,
   and the Tinker Bench recipe.
+- `test-nudge.js` — the question timer: a wonderstone is never held back; after the
+  parent-set time without a question a wishing star brings one, answering it is
+  rewarded and resets the clock; Off means no stars; the clock survives a reload with
+  a minute of grace; an older "pacing" value carries over as the timer.
 - `test-letters.js` — the letter-name table, per-device overrides that stay out of
   the family backup, queue-vs-interrupt, and the Voice check screen.
 - `test-spell-live.js` — taps real letter tiles in a real spelling challenge.

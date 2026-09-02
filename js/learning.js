@@ -695,27 +695,24 @@ var Learning = (function () {
     return out.slice(0, limit || 10);
   }
 
-  /* ---------------- question pacing ----------------
-     The parent sets a minimum gap between challenges in the Parents area.
-     It is enforced here, from family settings a child can't reach, and the
-     clock is stamped into the child's save so closing the app or reloading
-     the page doesn't hand out a free question. */
-  function paceGapMs() {
+  /* ---------------- the question timer ----------------
+     A parent sets how long a child may play without a question. The clock
+     is the last time a challenge was shown, stamped into the save so a
+     reload doesn't restart it. When it runs out the game sends a wishing
+     star down with a challenge (see Game.maybeStarfall) — rewarded like
+     any other, never a penalty. */
+  function nudgeMs() {
     if (!Store.profile) return 0;
-    return Store.paceMinutes(Store.profile.id) * 60000;
+    return Store.nudgeMinutes(Store.profile.id) * 60000;
   }
 
-  // milliseconds still to wait before another challenge may be shown (0 = go)
-  function paceWaitMs() {
-    var gap = paceGapMs();
-    if (gap <= 0) return 0;
+  // milliseconds until the next star is due (0 = due now; -1 = timer off)
+  function nudgeDueMs() {
+    var gap = nudgeMs();
+    if (gap <= 0) return -1;
     var last = (Store.data && Store.data.stats && Store.data.stats.lastChallengeAt) || 0;
-    if (!last) return 0;
     var left = gap - (Date.now() - last);
-    if (left <= 0) return 0;
-    // a clock pushed into the future (device time changed) shouldn't lock
-    // a child out for hours
-    return Math.min(left, gap);
+    return left > 0 ? left : 0;
   }
 
   function markChallengeShown() {
@@ -724,8 +721,7 @@ var Learning = (function () {
     Store.saveNow();
   }
 
-  // "4 minutes" / "1 minute" / "less than a minute"
-  function paceWaitText(ms) {
+  function minutesText(ms) {
     var mins = Math.ceil((ms || 0) / 60000);
     if (mins <= 0) return "a moment";
     if (mins === 1) return "about a minute";
@@ -744,7 +740,7 @@ var Learning = (function () {
     activeAssignments: activeAssignments, focusList: focusList, promotions: promotions,
     needsReview: needsReview, masteredRecently: masteredRecently, prettyKey: prettyKey,
     skillNeed: skillNeed,
-    paceGapMs: paceGapMs, paceWaitMs: paceWaitMs, paceWaitText: paceWaitText,
+    nudgeMs: nudgeMs, nudgeDueMs: nudgeDueMs, minutesText: minutesText,
     markChallengeShown: markChallengeShown
   };
 })();

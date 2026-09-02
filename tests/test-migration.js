@@ -58,8 +58,9 @@ const pw = require('playwright-core');
   ck('Penelope\'s ids remapped, math lands on hers', JSON.stringify(peA)===JSON.stringify(['reading-5','spelling-5','math-5','bible1']), JSON.stringify(peA));
   ck('rows gained enabled/autoGrade and kept their weights',
      fam.assignments.p_spencer.every(a=>a.enabled===true) && fam.assignments.p_spencer[0].weight===3 && fam.assignments.p_spencer[0].autoGrade===true);
-  ck('custom set, PIN, emails and pacing survived',
-     fam.custom.length===1 && fam.settings.pin==='1234' && fam.settings.emails[0]==='x@y.z' && fam.settings.paceMinutes===3);
+  ck('custom set, PIN, emails survived; old "pacing 3" became a 3-minute question timer',
+     fam.custom.length===1 && fam.settings.pin==='1234' && fam.settings.emails[0]==='x@y.z' && fam.settings.nudgeMinutes===3 && fam.settings.paceMinutes===undefined,
+     JSON.stringify({nudge: fam.settings.nudgeMinutes, pace: fam.settings.paceMinutes}));
   ck('the pre-migration family was stashed as a backup',
      await page.evaluate(()=>{ const b=JSON.parse(localStorage.getItem('lumen_family_v1_bak')); return b && b.version===1 && b.profiles[0].band==='younger'; }));
   ck('every remapped set actually exists', await page.evaluate(()=>['reading-2','spelling-2','math-2','reading-5','spelling-5','math-5'].every(c=>!!Store.curriculum(c))));

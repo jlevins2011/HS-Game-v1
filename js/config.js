@@ -14,7 +14,7 @@ var CONFIG = {
     icon: "✨",
     // Bump this on every build you send to a device. It shows on the home
     // screen and in the pause menu so you always know what's running.
-    version: "2.2.2",
+    version: "2.3.0",
     built: "2026-09-02",
     currencyName: "sparks",
     currencyIcon: "✨",
@@ -70,16 +70,17 @@ var CONFIG = {
     tierUpWins: 12,                 // clean wins before a tier ramps up
     reviewChance: 0.2,              // fraction of challenges that review older material
     backOffAt: 5,                   // struggle points before difficulty steps back
-    starfallMinutes: 5,             // minutes without learning before a Starfall rolls in
+    // Minutes a child may play WITHOUT a question before a wishing star
+    // falls and brings one (with a reward). The default; parents set it per
+    // child in the Parents area. 0 = never — pure free play.
+    starfallMinutes: 5,
+    nudgeChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30],
+    nudgeGraceSec: 60,              // after opening the game, at least this long before the first star
     // mastery boxes 0..5 -> how often an item is chosen (higher = more often)
     boxWeights: [4, 4, 2, 1, 0.5, 0.25],
     unseenWeight: 3,                // weight of never-tried items
     strugglePickChance: 0.45,       // chance a challenge deliberately targets a weak item
     choicesEasy: 3, choicesHard: 4, // answer-option counts
-    // Minimum minutes between challenges, out of the box. Parents change
-    // this per child in the Parents area (Assignments tab); children can't.
-    defaultPaceMinutes: 0,          // 0 = no enforced gap
-    paceChoices: [0, 1, 2, 3, 5, 8, 10, 15, 20, 30],
     // clean wins at the TOP tier of a grade set before the Parents area
     // suggests moving up a grade. Promotion is always a parent's tap.
     promoteWins: 10

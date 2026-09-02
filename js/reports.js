@@ -52,8 +52,8 @@ var Reports = (function () {
     lines.push(profile.emoji + " " + profile.name.toUpperCase());
     lines.push("- Time played this week: " + fmtMinutes(s.playMs) + " over " + s.daysPlayed.length + " day(s)");
     lines.push("- Game level: " + p.level + " (" + UI.rankFor(p.level) + "), " + p.sparks + " sparks");
-    var pace = Store.paceMinutes(profile.id);
-    lines.push("- Question pacing: " + (pace ? "at least " + pace + " min between challenges" : "off"));
+    var nudge = Store.nudgeMinutes(profile.id);
+    lines.push("- Question timer: " + (nudge ? "a wishing star brings a question after " + nudge + " min without one" : "off"));
     lines.push("- Grade: " + (CONFIG.GRADE_LABELS[profile.grade] || profile.grade || "not set"));
     lines.push("");
     lines.push("WHERE THEY ARE");

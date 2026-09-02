@@ -205,7 +205,7 @@ var Parent = (function () {
           Reports.fmtMinutes(save.stats.playMs) + " this week · " +
           save.stats.lifetime.challenges + " lifetime challenges"
         : "Hasn't played yet";
-      var pace = Store.paceMinutes(p.id);
+      var pace = Store.nudgeMinutes(p.id);
       var plan = Store.gradePlanFor(p.id);
       var planBits = CONFIG.SUBJECTS.map(function (sd) {
         var sub = plan.subjects[sd.id];
@@ -239,7 +239,7 @@ var Parent = (function () {
         (p.setupConfirmed ? "" : " <span class='tag warn'>needs a grown-up's setup</span>") +
         "<br>" + line + "<br>" +
         "<span class='pr-quiet'>" + esc(planBits || "no subjects on") + "</span>" +
-        "<span class='pr-quiet'>⏳ " + (pace ? "at least " + pace + " min between questions" : "no gap between questions") + "</span>" +
+        "<span class='pr-quiet'>🌠 " + (pace ? "a wishing star brings a question after " + pace + " min without one" : "no question timer — free play") + "</span>" +
         focusHtml + promoHtml +
         "<div class='pr-row'>" +
         "<button type='button' class='big-btn small-btn' data-setup='" + p.id + "'>🎓 Edit setup</button>" +
@@ -363,7 +363,7 @@ var Parent = (function () {
       "<div class='pace-now' id='setup-grade-label'>" + esc(gradeLabel(plan.grade)) + "</div></div>" +
       CONFIG.SUBJECTS.map(rowHtml).join("") +
       "<div class='pr-section'><i>Math sets are fact fluency — a supplement to a math curriculum, not a replacement. " +
-      "Bible and Latin aren't grade-leveled. Weights (how often each shows up) live in the Assignments tab.</i></div>" +
+      "Bible and Latin aren't grade-leveled. Weights (how often each shows up) and the question timer live in the Assignments tab.</i></div>" +
       "</div>" +
       "<div class='pr-row setup-actions'>" +
       "<button type='button' class='big-btn' id='setup-save'>" + (opts.fromKid ? "✅ SAVE & START EXPLORING" : "✅ SAVE") + "</button>" +
@@ -833,9 +833,9 @@ var Parent = (function () {
 
   /* ---------------- assignments tab ---------------- */
   function paceLabel(mins) {
-    if (!mins) return "No gap — questions whenever they're found";
-    if (mins === 1) return "At least 1 minute between questions";
-    return "At least " + mins + " minutes between questions";
+    if (!mins) return "Off — questions only when they find one";
+    if (mins === 1) return "Never more than 1 minute without a question";
+    return "Never more than " + mins + " minutes without a question";
   }
 
   function renderAssign() {
@@ -847,15 +847,17 @@ var Parent = (function () {
         "' data-child='" + p.id + "'>" + p.emoji + " " + esc(p.name) + "</button>";
     }).join("") + "</div>";
 
-    var pace = Store.paceMinutes(chosenChild);
-    var paceBtns = CONFIG.LEARN.paceChoices.map(function (m) {
+    var pace = Store.nudgeMinutes(chosenChild);
+    var paceBtns = CONFIG.LEARN.nudgeChoices.map(function (m) {
       return "<button type='button' class='pace-btn" + (m === pace ? " active" : "") +
         "' data-pace='" + m + "'>" + (m === 0 ? "Off" : m + "m") + "</button>";
     }).join("");
     var paceBox =
-      "<div class='pr-section'><b>⏳ Question pacing</b><br>" +
-      "<i>The shortest time that may pass between one challenge and the next. " +
-      "Wonderstones, chests, Starfalls and Elder Alder all wait it out. This is a " +
+      "<div class='pr-section'><b>🌠 Question timer</b><br>" +
+      "<i>The longest a child may play without a question. When the time runs out, a " +
+      "wishing star falls from the sky with a challenge — part of the game, and rewarded " +
+      "like any other. Any question they answer on their own resets the clock. Questions " +
+      "are never held back: wonderstones and chests open whenever they're found. This is a " +
       "parent setting — it isn't shown anywhere a child can change it, and it survives " +
       "reloading the game or resetting progress.</i>" +
       "<div class='pace-grid'>" + paceBtns + "</div>" +
@@ -900,7 +902,7 @@ var Parent = (function () {
     });
 
     function paintPace() {
-      var pace = Store.paceMinutes(chosenChild);
+      var pace = Store.nudgeMinutes(chosenChild);
       each("[data-pace]", function (b) {
         b.classList.toggle("active", Number(b.getAttribute("data-pace")) === pace);
       });
@@ -908,14 +910,14 @@ var Parent = (function () {
       if (now) now.textContent = paceLabel(pace);
     }
     tapEach("[data-pace]", function (b) {
-      Store.setPaceMinutes(chosenChild, Number(b.getAttribute("data-pace")));
+      Store.setNudgeMinutes(chosenChild, Number(b.getAttribute("data-pace")));
       paintPace();
     });
     tap($("pace-all"), function () {
-      var pace = Store.paceMinutes(chosenChild);
-      Store.setPaceMinutes(null, pace, true);
+      var pace = Store.nudgeMinutes(chosenChild);
+      Store.setNudgeMinutes(null, pace, true);
       paintPace();
-      UI.toast("⏳ " + paceLabel(pace) + " — for every explorer.");
+      UI.toast("🌠 " + paceLabel(pace) + " — for every explorer.");
     });
 
     // Update the row in place. A full re-render here would throw the parent
@@ -1003,7 +1005,7 @@ var Parent = (function () {
       "Bible memory verses are quoted from the King James Version (public domain) and every Bible item " +
       "shows its Scripture reference so you can audit it. The Latin set is original introductory material " +
       "written for this game. You control how much of each subject appears in the Assignments tab, and " +
-      "how often questions may interrupt play with ⏳ Question pacing.</div>";
+      "how long play may go without a question with the 🌠 Question timer.</div>";
   }
 
   /* ---------------- voice check ----------------

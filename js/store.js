@@ -76,13 +76,35 @@ var Store = (function () {
         pin: null,             // optional 4-digit parent PIN
         emails: [],            // weekly report recipients
         reportDays: CONFIG.REPORT.everyDays,
-        // Minimum minutes between learning challenges. Parent-only: it lives
-        // in family settings (behind the long-press + PIN), never in a
-        // child's save, so a child cannot change it or reset it away.
-        paceMinutes: CONFIG.LEARN.defaultPaceMinutes,   // family default
-        paceByChild: {}                                 // profileId -> minutes (overrides the default)
+        // The question timer: how long a child may play without a question
+        // before a wishing star brings one. Parent-only: it lives in family
+        // settings (behind the long-press + PIN), never in a child's save,
+        // so a child cannot change it or reset it away.
+        nudgeMinutes: CONFIG.LEARN.starfallMinutes,   // family default
+        nudgeByChild: {}                              // profileId -> minutes (overrides the default)
       }
     };
+  }
+
+  // Earlier builds stored "paceMinutes", a MINIMUM gap between questions —
+  // the opposite of what was wanted. A parent who set it meant "a question
+  // at least every N minutes", so the value carries over as the timer.
+  function normalizeSettings(raw) {
+    raw = raw || {};
+    var st = Object.assign(freshFamily().settings, raw);
+    // look at what was actually stored, not at the defaults just merged in
+    if (raw.nudgeMinutes === undefined || raw.nudgeMinutes === null) {
+      st.nudgeMinutes = (raw.paceMinutes > 0) ? raw.paceMinutes : CONFIG.LEARN.starfallMinutes;
+    }
+    if (!raw.nudgeByChild || typeof raw.nudgeByChild !== "object") {
+      st.nudgeByChild = {};
+      Object.keys(raw.paceByChild || {}).forEach(function (pid) {
+        if (raw.paceByChild[pid] > 0) st.nudgeByChild[pid] = raw.paceByChild[pid];
+      });
+    }
+    delete st.paceMinutes;
+    delete st.paceByChild;
+    return st;
   }
 
   function gradeOfProfileIn(fam, pid) {
@@ -113,7 +135,7 @@ var Store = (function () {
     });
     fam.overrides = old.overrides || {};
     fam.promoSnooze = old.promoSnooze || {};
-    fam.settings = Object.assign(freshFamily().settings, old.settings || {});
+    fam.settings = normalizeSettings(old.settings);
     return fam;
   }
 
@@ -128,7 +150,7 @@ var Store = (function () {
     }
     if (pf.version === FAMILY_VERSION) {
       var fam = Object.assign(freshFamily(), pf);
-      fam.settings = Object.assign(freshFamily().settings, pf.settings || {});
+      fam.settings = normalizeSettings(pf.settings);
       fam.overrides = pf.overrides || {};
       fam.promoSnooze = pf.promoSnooze || {};
       return fam;
@@ -196,7 +218,7 @@ var Store = (function () {
     family.profiles = family.profiles.filter(function (p) { return p.id !== pid; });
     delete family.assignments[pid];
     delete family.promoSnooze[pid];
-    if (family.settings.paceByChild) delete family.settings.paceByChild[pid];
+    if (family.settings.nudgeByChild) delete family.settings.nudgeByChild[pid];
     saveFamily();
     lsDel(SAVE_PREFIX + pid);
     lsDel(SAVE_PREFIX + pid + "_bak");
@@ -297,27 +319,29 @@ var Store = (function () {
     return s && s[cid] !== undefined ? s[cid] : null;
   }
 
-  /* -------- question pacing (parent-controlled) -------- */
-  var PACE_MAX = 120;
-  function paceMinutes(pid) {
+  /* -------- question timer (parent-controlled) --------
+     Minutes a child may play without a question before a wishing star
+     falls and brings one. 0 = never. */
+  var NUDGE_MAX = 120;
+  function nudgeMinutes(pid) {
     var s = family.settings || {};
-    var per = s.paceByChild || {};
-    var v = (pid && per[pid] !== undefined && per[pid] !== null) ? per[pid] : s.paceMinutes;
+    var per = s.nudgeByChild || {};
+    var v = (pid && per[pid] !== undefined && per[pid] !== null) ? per[pid] : s.nudgeMinutes;
     v = Number(v);
     if (!isFinite(v) || v < 0) v = 0;
-    return Math.min(PACE_MAX, Math.round(v));
+    return Math.min(NUDGE_MAX, Math.round(v));
   }
-  // pid null -> set the family default; "all" clears every override too
-  function setPaceMinutes(pid, minutes, applyToAll) {
+  // pid null -> set the family default; applyToAll clears every override too
+  function setNudgeMinutes(pid, minutes, applyToAll) {
     var v = Number(minutes);
     if (!isFinite(v) || v < 0) v = 0;
-    v = Math.min(PACE_MAX, Math.round(v));
-    if (!family.settings.paceByChild) family.settings.paceByChild = {};
+    v = Math.min(NUDGE_MAX, Math.round(v));
+    if (!family.settings.nudgeByChild) family.settings.nudgeByChild = {};
     if (applyToAll || !pid) {
-      family.settings.paceMinutes = v;
-      if (applyToAll) family.settings.paceByChild = {};
+      family.settings.nudgeMinutes = v;
+      if (applyToAll) family.settings.nudgeByChild = {};
     } else {
-      family.settings.paceByChild[pid] = v;
+      family.settings.nudgeByChild[pid] = v;
     }
     saveFamily();
     return v;
@@ -402,7 +426,7 @@ var Store = (function () {
         playMs: 0,
         daysPlayed: [],
         challenges: {},            // "subject/skill" -> { tries, clean, mistakes }
-        lastChallengeAt: 0,        // drives the parent-set minimum gap between questions
+        lastChallengeAt: 0,        // the question timer counts from here (survives reloads)
         lifetime: { challenges: 0, clean: 0, sparks: 0, gathered: 0, built: 0, quests: 0, harvested: 0 }
       }
     };
@@ -569,7 +593,7 @@ var Store = (function () {
     gradeSetId: gradeSetId, parseGradeSet: parseGradeSet, nextGrade: nextGrade, subjectDef: subjectDef,
     gradePlanFor: gradePlanFor, applyGradePlan: applyGradePlan,
     promote: promote, snoozePromotion: snoozePromotion, promotionSnoozedAt: promotionSnoozedAt,
-    paceMinutes: paceMinutes, setPaceMinutes: setPaceMinutes,
+    nudgeMinutes: nudgeMinutes, setNudgeMinutes: setNudgeMinutes,
     allCurricula: allCurricula, curriculum: curriculum, baseCurriculum: baseCurriculum,
     isOverridden: isOverridden, editableCopy: editableCopy, commitEdit: commitEdit, clearOverride: clearOverride,
     addCustomCurriculum: addCustomCurriculum, removeCustomCurriculum: removeCustomCurriculum,

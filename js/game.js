@@ -94,7 +94,13 @@ var Game = (function () {
     UI.hideHome();
     running = true;
     Game.running = true;
-    lastEdu = Date.now();
+    // The question timer continues from the last challenge shown, even
+    // across a reload — but never drop a star on a child who just opened
+    // the game; give them a minute to get their bearings.
+    var last = Store.data.stats.lastChallengeAt || 0;
+    var grace = CONFIG.LEARN.nudgeGraceSec * 1000;
+    var gapMs = Learning.nudgeMs();
+    lastEdu = gapMs > 0 ? Math.max(last, Date.now() - gapMs + grace) : Date.now();
     travelTo(Store.data.player.isle || "meadowmere");
     Controls.setEnabled(true);
     UI.updateHud();
@@ -323,16 +329,13 @@ var Game = (function () {
     var go = document.getElementById("sp-go");
     if (go) go.addEventListener("pointerdown", function () {
       UI.showChallenge("super", function (r1) {
-        if (r1.paced) return;   // the pacing message already explained itself
         if (!r1.correct || r1.skipped) { UI.toast("The spring stays quiet... try again soon!"); return; }
-        // The Rite is one ceremony in two parts — once it has begun, the
-        // parent's question gap doesn't cut it in half.
         UI.showChallenge("super", function (r2) {
           if (!r2.correct || r2.skipped) { UI.toast("So close! The spring flickered. Try again soon!"); return; }
           var inv = Store.data.player.inventory;
           Object.keys(cost).forEach(function (k) { inv[k] -= cost[k]; });
           restoreZone(o, zone);
-        }, "🕯️ Rite of Light (2 of 2)", { ignorePace: true });
+        }, "🕯️ Rite of Light (2 of 2)");
       }, "🕯️ Rite of Light (1 of 2)");
     });
   }
@@ -513,14 +516,19 @@ var Game = (function () {
   var lastEdu = Date.now();
   function notifyEdu() { lastEdu = Date.now(); }
 
+  /* THE QUESTION TIMER. A parent sets how long a child may play without a
+     question (Parents → Assignments). When that runs out, a wishing star
+     tumbles from the sky ahead of the player and brings a challenge — part
+     of the game, rewarded like any other. 0 turns it off. Any question the
+     child answers on their own (wonderstone, chest…) resets the clock via
+     notifyEdu(). */
   var fallingStar = null;
   function maybeStarfall() {
     if (!running || fallingStar) return;
     if (document.getElementById("overlay").classList.contains("open")) return;
-    if (Date.now() - lastEdu < CONFIG.LEARN.starfallMinutes * 60 * 1000) return;
-    // Never send a star down inside the parent's quiet gap — the child would
-    // chase it only to be told to come back later.
-    if (Learning.paceWaitMs() > 0) return;
+    var gapMs = Learning.nudgeMs();
+    if (gapMs <= 0) return;
+    if (Date.now() - lastEdu < gapMs) return;
     lastEdu = Date.now();
     // a glowing star tumbles from the sky ahead of the player
     var g = new Geo.Builder();
