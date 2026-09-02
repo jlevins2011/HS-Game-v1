@@ -289,7 +289,17 @@ var UI = (function () {
 
   function updateCraftButton() {
     var b = $("btn-craft");
-    b.style.display = (availableCraft() || availableWorkshop().length) ? "block" : "none";
+    // Show the bench whenever there is still something to tinker toward, not
+    // only when it's affordable — otherwise a child who has crafted the
+    // hatchet and brush loses the button and never learns what a Cloudcap
+    // costs. Dimmed while nothing is affordable; tapping it lists what to
+    // gather.
+    var ready = !!(availableCraft() || availableWorkshop().length);
+    var next = nextCraftInfo();
+    var pending = visibleWorkshop().length > 0 || !!(next && Store.data.player.level >= next.level);
+    b.style.display = (ready || pending) ? "block" : "none";
+    b.classList.toggle("dim", !ready);
+    b.textContent = ready ? "🔧 TINKER!" : "🔧 TINKER";
     var s = $("btn-kiln");
     if (s) s.style.display = availableKiln().length ? "block" : "none";
   }

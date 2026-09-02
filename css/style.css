@@ -184,6 +184,7 @@ button { font-family: inherit; }
 #btn-mode { right: 104px; bottom: calc(env(safe-area-inset-bottom, 10px) + 84px); width: 60px; height: 60px; font-size: 24px; }
 #btn-bag { right: 104px; bottom: calc(env(safe-area-inset-bottom, 10px) + 158px); width: 60px; height: 60px; font-size: 24px; }
 #btn-mode.build { background: rgba(255, 180, 60, .5); }
+#btn-craft.dim { opacity: .62; }
 #btn-craft {
   display: none;
   right: 18px; bottom: calc(env(safe-area-inset-bottom, 10px) + 238px);
