@@ -114,8 +114,12 @@ var UI = (function () {
     $("build-sheet").classList.remove("open");
   }
   function updateBuildSheet() {
+    var selected=Build.pieceDef(Build.activePiece);
+    if($("build-detail")) $("build-detail").textContent=Build.removeMode?"Remove a piece to recover its materials.":selected.name+" · "+selected.desc;
+    ["roof-down","roof-up"].forEach(function(id){if($(id))$(id).hidden=!Build.isRoof(Build.activePiece);});
     var sheet = $("build-pieces");
     if (!sheet || !$("build-sheet").classList.contains("open")) return;
+    var previousScroll=sheet.scrollLeft;
     sheet.innerHTML = "";
     Build.PIECES.forEach(function (p) {
       var locked = p.needs && !Store.data.player.tools[p.needs];
@@ -128,7 +132,8 @@ var UI = (function () {
         "<span class='piece-cost'>" + (locked ? "🔒 Wren's secret" : Object.keys(p.cost).map(function (k) {
           return p.cost[k] + (ITEM_ICON[k] || k);
         }).join(" ")) + "</span>";
-      card.addEventListener("pointerdown", function (e) {
+      card.addEventListener("pointerdown", function(e){e.stopPropagation();});
+      card.addEventListener("click", function (e) {
         e.stopPropagation();
         if (locked) { toast("🔒 Wren the Tinker teaches this one!"); return; }
         Build.setPiece(p.id);
@@ -136,6 +141,9 @@ var UI = (function () {
       });
       sheet.appendChild(card);
     });
+    sheet.scrollLeft=previousScroll;
+    var active=sheet.querySelector(".active");
+    if(active) active.scrollIntoView({block:"nearest",inline:"nearest"});
     $("build-remove").classList.toggle("active", Build.removeMode);
   }
 
@@ -192,28 +200,33 @@ var UI = (function () {
       "</div>";
 
     var groupsHtml = "";
-    SATCHEL_GROUPS.forEach(function (grp) {
+    var known=SATCHEL_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
+    var groups=SATCHEL_GROUPS.concat([{name:"Other keepsakes",items:Object.keys(inv).filter(function(k){return known.indexOf(k)<0;})}]);
+    groups.forEach(function (grp) {
       var have = grp.items.filter(function (k) { return (inv[k] || 0) > 0; });
       if (!have.length) return;
       groupsHtml += "<div class='satchel-group'><div class='satchel-label'>" + grp.name + "</div><div class='satchel-row'>" +
         have.map(function (item) {
-          return "<button class='satchel-item' data-item='" + item + "'>" +
+          return "<button class='satchel-item' data-item='" + safeText(item) + "'>" +
             "<span class='inv-icon'>" + (ITEM_ICON[item] || "▫️") + "</span>" +
             "<span class='inv-count'>" + inv[item] + "</span>" +
-            "<span class='inv-name'>" + item + "</span></button>";
+            "<span class='inv-name'>" + safeText(item) + "</span></button>";
         }).join("") + "</div></div>";
     });
     if (!groupsHtml) groupsHtml = "<div class='ch-sub'>Your satchel is empty — go gather something!</div>";
 
     openOverlay(
-      "<div class='ch-title'>🎒 " + Store.profile.name + "'s Satchel</div>" +
+      "<div class='ch-title'>🎒 " + safeText(Store.profile.name) + "'s Satchel</div>" +
       "<div class='ch-sub'>" + CONFIG.BRAND.currencyIcon + " " + p.sparks + " sparks · Lv " + p.level + " " + rankFor(p.level) + "</div>" +
       toolsHtml +
       "<div class='satchel-scroll'>" + groupsHtml + "</div>" +
       "<div class='ch-sub'>Build with 🛠️ · craft tools with TINKER · smelt at the KILN</div>" +
+      "<div class='supply-actions'><button class='big-btn small-btn' id='inv-market'>Trade & supplies</button><button class='big-btn small-btn' id='inv-projects'>My projects</button></div>" +
       "<button class='big-btn' id='inv-close'>BACK TO THE GAME</button>"
     );
     $("inv-close").addEventListener("pointerdown", closeOverlay);
+    $("inv-market").addEventListener("click",showMarket);
+    $("inv-projects").addEventListener("click",showProjects);
     document.querySelectorAll(".inv-station").forEach(function (b) {
       b.addEventListener("pointerdown", function (e) {
         e.stopPropagation();
@@ -225,9 +238,32 @@ var UI = (function () {
       slot.addEventListener("pointerdown", function () {
         var item = slot.getAttribute("data-item");
         GameAudio.sfx.pop();
-        toast(ITEM_BLURB[item] || (ITEM_ICON[item] || "") + " " + item + " — surely useful for something!");
+        showItem(item);
       });
     });
+  }
+
+  function safeText(s) {return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function showItem(item) {
+    var inv=Store.data.player.inventory,uses=Economy.uses(item),value=Economy.VALUES[item];
+    openOverlay("<div class='ch-title'>"+safeText(item)+" · "+(inv[item]||0)+"</div>"+
+      "<div class='ch-sub'>Used for</div><ul class='item-uses'>"+(uses.length?uses.map(function(u){return "<li>"+safeText(u)+"</li>";}).join(""):"<li>A keepsake from an earlier adventure.</li>")+"</ul>"+
+      (value?"<button class='big-btn' id='item-sell'>Trade 1 for "+value+" sparks</button>":"")+
+      "<button class='ghost-btn' id='item-back'>Back to satchel</button>");
+    $("item-back").addEventListener("click",showInventory);
+    if($("item-sell"))$("item-sell").addEventListener("click",function(){if(Economy.sell(item,1)){GameAudio.sfx.spark();updateHud();updateHotbar();updateQuestHud();showItem(item);}});
+  }
+  function showMarket() {
+    openOverlay("<div class='ch-title'>Trade & supplies</div><div class='ch-sub'>"+Store.data.player.sparks+" sparks · Trade surplus from your satchel.</div><div class='world-list'>"+
+      Economy.SUPPLIES.map(function(s){return "<button class='world-card supply-card' data-supply='"+s.id+"' "+(Store.data.player.sparks<s.price?"disabled":"")+"><span class='world-name'>"+s.name+"</span><span class='world-req'>"+s.price+" sparks</span></button>";}).join("")+"</div><button class='ghost-btn' id='market-back'>Back to satchel</button>");
+    $("market-back").addEventListener("click",showInventory);
+    document.querySelectorAll("[data-supply]").forEach(function(b){b.addEventListener("click",function(){if(Economy.buy(b.dataset.supply)){GameAudio.sfx.spark();updateHud();updateHotbar();updateQuestHud();showMarket();}});});
+  }
+  function showProjects() {
+    openOverlay("<div class='ch-title'>My island projects</div><div class='ch-sub'>Build at your own pace. Each reward can be claimed once per explorer.</div>"+
+      Economy.PROJECTS.map(function(p){var done=(Store.data.player.projects||{})[p.id],checks=Economy.projectProgress(p),ready=checks.every(function(c){return c.have>=c.need;});return "<section class='project-card'><h3>"+p.name+"</h3><p>"+p.desc+"</p><ul>"+checks.map(function(c){return "<li>"+(c.have>=c.need?"✓ ":"")+c.name+" <b>"+c.have+"/"+c.need+"</b></li>";}).join("")+"</ul><button class='big-btn small-btn' data-project='"+p.id+"' "+(!ready||done?"disabled":"")+">"+(done?"Completed":"Claim "+p.reward+" sparks")+"</button></section>";}).join("")+"<button class='ghost-btn' id='projects-back'>Back to satchel</button>");
+    $("projects-back").addEventListener("click",showInventory);
+    document.querySelectorAll("[data-project]").forEach(function(b){b.addEventListener("click",function(){if(Economy.claim(b.dataset.project)){GameAudio.sfx.quest();updateHud();showProjects();}});});
   }
 
   function toggleInventory() {
@@ -236,32 +272,21 @@ var UI = (function () {
   }
 
   /* ---------------- crafting ---------------- */
-  var CRAFTS = [
-    { tier: 1, name: "stone mallet", level: 2, needs: { stone: 5, timber: 2 }, icon: "🔨" },
-    { tier: 2, name: "skysteel mallet", level: 4, needs: { skysteel: 4, timber: 2 }, icon: "🔨" },
-    { tier: 3, name: "starstone mallet", level: 6, needs: { starstone: 3, timber: 2 }, icon: "🔨" }
-  ];
+  var CRAFTS = Economy.CRAFTS;
 
-  var WORKSHOP = [
-    { id: "hatchet", kind: "tool", tool: "hatchet", name: "hatchet", icon: "🪓",
-      needs: { stone: 3, timber: 2 }, blurb: "Chops trees down in fewer swings!" },
-    { id: "brush", kind: "tool", tool: "brush", name: "brush", icon: "🖌️",
-      needs: { timber: 2, fluff: 1 }, blurb: "Brush tuftles for fluff — they love it!" },
-    { id: "cloudcap", kind: "tool", tool: "cloudcap", name: "cloudcap", icon: "🪂",
-      needs: { fluff: 4, feather: 2, timber: 2 }, blurb: "Hold ⬆️ while falling to GLIDE across the sky!" }
-  ];
+  var WORKSHOP = Economy.WORKSHOP;
 
   function canAfford(needs) {
     var inv = Store.data.player.inventory;
-    return Object.keys(needs).every(function (k) { return (inv[k] || 0) >= needs[k]; });
+    return Economy.canAfford(needs);
   }
   function takeNeeds(needs) {
     var inv = Store.data.player.inventory;
-    Object.keys(needs).forEach(function (k) { inv[k] -= needs[k]; });
+    return Economy.exchange(needs,{},0,"Crafting");
   }
   function giveItems(gives) {
     var inv = Store.data.player.inventory;
-    Object.keys(gives).forEach(function (k) { inv[k] = (inv[k] || 0) + gives[k]; });
+    return Economy.exchange({},gives,0,"Crafting");
   }
 
   function availableCraft() {
@@ -301,15 +326,11 @@ var UI = (function () {
     b.classList.toggle("dim", !ready);
     b.textContent = ready ? "🔧 TINKER!" : "🔧 TINKER";
     var s = $("btn-kiln");
-    if (s) s.style.display = availableKiln().length ? "block" : "none";
+    if (s) s.style.display = Store.data.player.tools.kiln ? "block" : "none";
   }
 
   /* ---------------- Wren's kiln recipes ---------------- */
-  var KILN = [
-    { need: "kiln", needs: { "skysteel ore": 1, emberstone: 1 }, gives: { skysteel: 1 }, name: "skysteel ingot", icon: "⚙️" },
-    { need: "kiln", needs: { stone: 2, emberstone: 1 }, gives: { glass: 1 }, name: "glass", icon: "🪟" },
-    { need: "kiln", needs: { berries: 2, emberstone: 1 }, gives: { "berry tart": 1 }, name: "berry tart", icon: "🥧" }
-  ];
+  var KILN = Economy.KILN;
 
   function availableKiln() {
     var p = Store.data.player;
@@ -321,7 +342,7 @@ var UI = (function () {
   }
 
   function doKiln() {
-    var recipes = availableKiln();
+    var recipes = KILN.filter(function(r){return Store.data.player.tools[r.need];});
     if (!recipes.length) { toast("Need emberstone plus ore (or sand, berries, timber) for the kiln!"); return; }
     var html = "<div class='ch-title'>🔥 Sky Kiln</div>" +
       "<div class='ch-sub'>Wren's kiln glows and hums. What shall we make?</div>" +
@@ -340,8 +361,7 @@ var UI = (function () {
         var r = recipes[+card.getAttribute("data-i")];
         var inv = Store.data.player.inventory;
         if (!Object.keys(r.needs).every(function (k) { return (inv[k] || 0) >= r.needs[k]; })) return;
-        Object.keys(r.needs).forEach(function (k) { inv[k] -= r.needs[k]; });
-        Object.keys(r.gives).forEach(function (k) { inv[k] = (inv[k] || 0) + r.gives[k]; });
+        if(!Economy.exchange(r.needs,r.gives,0,"Kiln"))return;
         Store.save();
         GameAudio.sfx.kiln();
         toast(r.icon + " You made " + r.name + "!", 2600);
@@ -378,6 +398,7 @@ var UI = (function () {
     var craft = availableCraft();
     if (!craft) return;
     startToolChallenge(craft.name, function () {
+      if(!canAfford(craft.needs) || Store.data.player.toolTier !== craft.tier-1)return;
       takeNeeds(craft.needs);
       Store.data.player.toolTier = craft.tier;
       Store.save();
@@ -411,7 +432,7 @@ var UI = (function () {
     }
 
     var html = "<div class='ch-title'>🛠️ Tinker Bench</div>" +
-      "<div class='ch-sub'>Build doors, bedrolls, garden beds, and tools!</div>";
+      "<div class='ch-sub'>Craft tools and seeds. Build furniture from the construction tray.</div>";
 
     if (ready.length || malletReady) {
       html += "<div class='world-list'>";
@@ -460,6 +481,7 @@ var UI = (function () {
     if (r.tool) {
       closeOverlay();
       startToolChallenge(r.name, function () {
+        if(!canAfford(r.needs) || Store.data.player.tools[r.tool])return;
         takeNeeds(r.needs);
         if (r.gives) giveItems(r.gives);
         Store.data.player.tools[r.tool] = true;
@@ -955,6 +977,8 @@ var UI = (function () {
       jb.addEventListener(ev, function () { Player.jump = false; });
     });
     // build sheet controls
+    $("roof-up").addEventListener("click",function(){Build.liftRoof(1);});
+    $("roof-down").addEventListener("click",function(){Build.liftRoof(-1);});
     $("build-rotate").addEventListener("pointerdown", function (e) { e.stopPropagation(); Build.rotate(); });
     $("build-remove").addEventListener("pointerdown", function (e) {
       e.stopPropagation();
@@ -972,7 +996,7 @@ var UI = (function () {
     setPrompt: setPrompt, gainPopup: gainPopup,
     showBuildSheet: showBuildSheet, hideBuildSheet: hideBuildSheet, updateBuildSheet: updateBuildSheet,
     showChallenge: showChallenge, showDialogue: showDialogue,
-    showInventory: showInventory, toggleInventory: toggleInventory,
+    showProjects:showProjects, showMarket:showMarket, showInventory: showInventory, toggleInventory: toggleInventory,
     showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
     showNewExplorer: showNewExplorer, setJumpGlyph: setJumpGlyph,
     rankFor: rankFor, xpNeeded: xpNeeded, nextCraftInfo: nextCraftInfo, showWorkshop: showWorkshop,

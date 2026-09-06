@@ -82,3 +82,14 @@ They verify the **string handed to the speech engine**, never how it sounds. Whe
 pronunciation itself has to be checked by ear — which is what the Voice check screen
 in the Parents area is for. Likewise the content lint proves every tier is playable;
 it cannot judge whether a word list is right for a grade. Read the content.
+
+## Homebuilding (2.5)
+
+`test-homebuilding.js` covers roof/stair snapping, mesh winding at every rotation,
+actual sloped collision heights, duplicate placement rules, refunds, trades,
+project claims, the family provider seam and save/reload. `test-house-playthrough.js`
+checks a furnished roofed house, ceiling collision, gardening, stair continuation
+and the construction tray at tablet and phone sizes. Run `node tests/run-regression.js`
+for the existing suite, or pass individual test filenames. The launch helper uses
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE`, installed macOS Chrome, or the Playwright default.
+All browser tests block external network requests, including email report relays.

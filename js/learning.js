@@ -54,8 +54,8 @@ var Learning = (function () {
   /* ---------------- assignments ---------------- */
   function activeAssignments() {
     if (!Store.profile) return [];
-    return Store.assignmentsFor(Store.profile.id).filter(function (a) {
-      return a.enabled !== false && !!Store.curriculum(a.cid) && a.weight > 0;
+    return FamilyServices.assignmentsFor(Store.profile.id).filter(function (a) {
+      return a.enabled !== false && !!FamilyServices.curriculum(a.cid) && a.weight > 0;
     });
   }
 
@@ -504,7 +504,7 @@ var Learning = (function () {
       return { cid: a.cid, weight: a.weight };
     }));
     if (!pick) return null;
-    var cur = Store.curriculum(pick.cid);
+    var cur = FamilyServices.curriculum(pick.cid);
     var tierIdx = pickTierIndex(cur, boost);
     var items = itemsOf(cur, tierIdx);
     if (!items.length && cur.subject !== "math") {
@@ -576,7 +576,7 @@ var Learning = (function () {
   }
 
   function applyRamp(ch, result) {
-    var cur = Store.curriculum(ch.cid);
+    var cur = FamilyServices.curriculum(ch.cid);
     if (!cur) return;
     var maxTier = tiersOf(cur).length - 1;
     if (maxTier < 1) return;
@@ -610,8 +610,8 @@ var Learning = (function () {
     var d = saveData || Store.data;
     var who = pid || (Store.profile && Store.profile.id);
     if (!who) return [];
-    return Store.assignmentsFor(who).map(function (a) {
-      var cur = Store.curriculum(a.cid);
+    return FamilyServices.assignmentsFor(who).map(function (a) {
+      var cur = FamilyServices.curriculum(a.cid);
       if (!cur) return null;
       var st = (d.learn && d.learn.tiers && d.learn.tiers[a.cid]) || { tier: 0, tierWins: 0 };
       var tiers = tiersOf(cur);
@@ -632,17 +632,17 @@ var Learning = (function () {
     var who = pid || (Store.profile && Store.profile.id);
     if (!who || !d || !d.learn) return [];
     var out = [];
-    Store.assignmentsFor(who).forEach(function (a) {
+    FamilyServices.assignmentsFor(who).forEach(function (a) {
       if (a.enabled === false) return;
       var g = Store.parseGradeSet(a.cid);
       if (!g) return;
-      var cur = Store.curriculum(a.cid);
+      var cur = FamilyServices.curriculum(a.cid);
       if (!cur) return;
       var top = tiersOf(cur).length - 1;
       var st = d.learn.tiers && d.learn.tiers[a.cid];
       if (!st || st.tier < top) return;
       if ((st.tierWins || 0) < CONFIG.LEARN.promoteWins) return;
-      var snoozed = Store.promotionSnoozedAt(who, a.cid);
+      var snoozed = FamilyServices.promotionSnoozedAt(who, a.cid);
       if (snoozed !== null && st.tierWins < snoozed + CONFIG.LEARN.promoteWins) return;
       var nxt = Store.nextGrade(g.grade);
       out.push({ cid: a.cid, name: cur.name, subject: g.subject, grade: g.grade,
@@ -658,7 +658,7 @@ var Learning = (function () {
     var out = [];
     var m = d.learn.mastery;
     Object.keys(m).forEach(function (cid) {
-      var cur = Store.curriculum(cid);
+      var cur = FamilyServices.curriculum(cid);
       var items = [];
       Object.keys(m[cid]).forEach(function (itemKey) {
         var skills = m[cid][itemKey];
@@ -703,7 +703,7 @@ var Learning = (function () {
      any other, never a penalty. */
   function nudgeMs() {
     if (!Store.profile) return 0;
-    return Store.nudgeMinutes(Store.profile.id) * 60000;
+    return FamilyServices.nudgeMinutes(Store.profile.id) * 60000;
   }
 
   // milliseconds until the next star is due (0 = due now; -1 = timer off)

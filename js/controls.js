@@ -29,10 +29,11 @@ var Controls = (function () {
 
     window.addEventListener("keydown", onKey(true));
     window.addEventListener("keyup", onKey(false));
+    window.addEventListener("blur", function(){keys={};keysWereMoving=false;Player.move.x=0;Player.move.z=0;Player.jump=false;joyId=lookId=null;if(joyBase)joyBase.style.display="none";});
 
     // stop iOS scroll/zoom gestures while playing
     document.addEventListener("touchmove", function (e) {
-      if (enabled) e.preventDefault();
+      if (enabled && e.target === el) e.preventDefault();
     }, { passive: false });
   }
 
@@ -40,6 +41,7 @@ var Controls = (function () {
     enabled = v;
     if (!v) {
       Player.move.x = 0; Player.move.z = 0; Player.jump = false;
+      keys = {}; keysWereMoving = false;
       joyId = lookId = null;
       if (joyBase) joyBase.style.display = "none";
     }

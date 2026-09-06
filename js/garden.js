@@ -107,16 +107,12 @@ var Garden = (function () {
     var key = plotKey(piece);
     var plot = plots()[key];
     if (!plot) {
-      var seed = seedInHand();
-      if (!seed) { UI.toast("🌱 You need seeds! Curio chests and berry bushes hide them."); return; }
-      var inv = Store.data.player.inventory;
-      inv[seed] -= 1;
-      plot = { crop: cropForSeed(seed), stage: 0, at: Date.now() };
-      plots()[key] = plot;
-      Store.save();
-      refreshCropMesh(piece, plot);
-      GameAudio.sfx.grow();
-      UI.toast("🌱 Planted " + seed + "! Watch it grow...");
+      var available=Object.keys(CROPS).filter(function(k){return (Store.data.player.inventory[CROPS[k].seed]||0)>0;});
+      if(!available.length) {UI.toast("Find seeds in bushes, or get them from Trade & supplies.");return;}
+      if(available.length===1) {plant(piece,available[0]);return;}
+      UI.openOverlay("<div class='ch-title'>What shall we grow?</div><div class='world-list'>"+available.map(function(k){return "<button class='world-card' data-crop='"+k+"'>"+CROPS[k].icon+" "+k+"</button>";}).join("")+"</div><button class='ghost-btn' id='plant-back'>Later</button>");
+      document.getElementById("plant-back").addEventListener("click",UI.closeOverlay);
+      document.querySelectorAll("[data-crop]").forEach(function(b){b.addEventListener("click",function(){var k=b.dataset.crop;UI.closeOverlay();plant(piece,k);});});
       return;
     }
     if (plot.stage < 2) {
@@ -135,6 +131,16 @@ var Garden = (function () {
     Game.burst(piece.x, piece.y + 1, piece.z, crop.color, 12);
     UI.gainPopup("+" + n + " " + crop.icon + " " + crop.fruit);
     Store.save();
+  }
+
+  function plant(piece,kind) {
+    var crop=CROPS[kind],key=plotKey(piece);
+    if(!crop || plots()[key] || Build.pieces.indexOf(piece)<0)return;
+    var needs={};needs[crop.seed]=1;
+    if(!Economy.exchange(needs,{},0,"Planting"))return;
+    var plot={crop:kind,stage:0,at:Date.now()};plots()[key]=plot;
+    refreshCropMesh(piece,plot);Store.save();GameAudio.sfx.grow();
+    UI.toast("Planted "+kind+". Come back for your harvest!");UI.updateHotbar();
   }
 
   function tick() {

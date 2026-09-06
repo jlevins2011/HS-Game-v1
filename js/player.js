@@ -143,7 +143,9 @@ var Player = (function () {
 
     // vertical
     onGround = false;
+    var ceiling = window.Build && Build.ceilingAt ? Build.ceilingAt(pos.x,pos.z,pos.y,HEIGHT) : Infinity;
     pos.y += vel.y * dt;
+    if(vel.y>0 && pos.y+HEIGHT>ceiling) {pos.y=ceiling-HEIGHT;vel.y=0;}
     var ground = groundAt(pos.x, pos.z, pos.y);
     if (ground > -Infinity && pos.y <= ground) {
       // smooth snap: never pop up more than a step at once
@@ -155,7 +157,7 @@ var Player = (function () {
     // floats slowly, so the wind comes for them sooner)
     if (pos.y < (gliding ? -28 : -70)) {
       var camp = (window.Build ? Build.campSpot() : null);
-      if (camp) spawnAt(camp.x, camp.z);
+      if (camp) {spawnAt(camp.x, camp.z);if(Number.isFinite(camp.y))pos.y=camp.y+0.05;}
       else spawnAt(Terrain.CX, Terrain.CZ);
       if (window.UI && UI.toast) UI.toast("🪂 A friendly wind carried you back!");
     }

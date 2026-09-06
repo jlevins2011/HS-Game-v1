@@ -3,7 +3,7 @@
    pre-migration copies are stashed. */
 const pw = require('playwright-core');
 (async () => {
-  const browser = await pw.chromium.launch({ executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome', headless:true,
+  const browser = await require('./browser').launch({ headless:true,
     args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox'] });
   const ctx = await browser.newContext({ viewport:{width:1180,height:820}, hasTouch:true, isMobile:true,
     userAgent:'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
@@ -33,7 +33,7 @@ const pw = require('playwright-core');
                           bible1: { 'v:Genesis 1:1': { verse: { box: 5, win: 8, miss: 0, last: 5 } } } } },
       isles: { meadowmere: { removed: {}, pieces: [ { t: 'floor', x: 1, z: 1 } ], springs: [], planters: {}, bridges: {} } },
       quests: { active: null, completed: 2 },
-      stats: { weekStart: 1, lastReportAt: 0, playMs: 60000, daysPlayed: ['2026-9-1'], challenges: { 'reading/hear': { tries: 7, clean: 6, mistakes: 1 } },
+      stats: { weekStart: Date.now(), lastReportAt: Date.now(), playMs: 60000, daysPlayed: ['2026-9-1'], challenges: { 'reading/hear': { tries: 7, clean: 6, mistakes: 1 } },
                lastChallengeAt: 0, lifetime: { challenges: 12, clean: 9, sparks: 9, gathered: 30, built: 1, quests: 2, harvested: 0 } } });
     localStorage.setItem('lumen_save_v1_p_spencer', JSON.stringify(save('p_spencer')));
     localStorage.setItem('lumen_save_v1_p_penelope', JSON.stringify(save('p_penelope')));

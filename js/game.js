@@ -190,6 +190,8 @@ var Game = (function () {
     var pieceHits = npcRaycaster.intersectObjects(pieceMeshes, false);
     if (pieceHits.length && (!objHit || pieceHits[0].distance < objHit.dist)) {
       var piece = pieceHits[0].object.userData.piece;
+      if (piece.t === "bench") { UI.showWorkshop(); return; }
+      if (piece.t === "bed") { UI.toast("Your bed is your camp. You will return here if you fall."); return; }
       if (piece.t === "planter") { Garden.tap(piece); return; }
       if (piece.t === "door") { Build.toggleDoor(piece); return; }
       if (piece.t === "tent") { UI.toast("⛺ Your cozy camp. Sweet dreams guaranteed."); return; }
@@ -664,7 +666,7 @@ var Game = (function () {
       UI.setPrompt("🚪", dh.piece.open ? "Door · tap to close" : "Door · tap to open", null);
       return;
     }
-    var tappable = Build.pieces.filter(function (p) { return p.t === "planter" || p.t === "door"; })
+    var tappable = Build.pieces.filter(function (p) { return p.t === "planter" || p.t === "door" || p.t === "bench" || p.t === "bed"; })
                               .map(function (p) { return p.mesh; });
     if (tappable.length) {
       npcRaycaster.far = CONFIG.MOVE.reach;
@@ -672,6 +674,8 @@ var Game = (function () {
       if (ph.length) {
         var hp = ph[0].object.userData.piece;
         if (hp.t === "door") UI.setPrompt("🚪", hp.open ? "Door · tap to close" : "Door · tap to open", null);
+        else if(hp.t === "bench") UI.setPrompt("🛠️","Workshop · tap to craft",null);
+        else if(hp.t === "bed") UI.setPrompt("🛏️","Your camp · feather bed",null);
         else UI.setPrompt("🌱", Garden.promptFor(hp), null);
         return;
       }

@@ -54,9 +54,12 @@
   <button id="btn-kiln">🔥 KILN!</button>
 
   <div id="build-sheet">
+    <div id="build-detail"></div>
     <div id="build-pieces"></div>
     <div id="build-actions">
-      <button class="build-act" id="build-rotate">⟳</button>
+      <button class="build-act" id="build-rotate" aria-label="Rotate piece">⟳ Rotate</button>
+      <button class="build-act" id="roof-down" aria-label="Lower roof">− Roof</button>
+      <button class="build-act" id="roof-up" aria-label="Raise roof">+ Roof</button>
       <button class="build-act" id="build-remove">🧹</button>
       <button class="build-act done" id="build-done">✔</button>
     </div>
@@ -93,12 +96,14 @@ if (!window.THREE) {
 <script src="js/content/latin.js"></script>
 <script src="js/content/bible.js"></script>
 <script src="js/store.js"></script>
+<script src="js/family-services.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/learning.js"></script>
 <script src="js/activities.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/terrain.js"></script>
 <script src="js/objects.js"></script>
+<script src="js/economy.js"></script>
 <script src="js/build.js"></script>
 <script src="js/player.js"></script>
 <script src="js/controls.js"></script>

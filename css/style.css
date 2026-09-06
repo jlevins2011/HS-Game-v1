@@ -754,3 +754,30 @@ button.inv-tool { cursor: pointer; }
   pointer-events: none;
 }
 .version-line { font-size: 12px; opacity: .75; margin-top: -4px; }
+
+/* Construction and home projects */
+#build-detail { color:#eef5ff; padding:10px 14px 2px; font-size:14px; line-height:1.4; max-width:720px; }
+#build-actions .build-act { min-width:48px; min-height:44px; font-size:14px; padding:8px 12px; }
+#build-actions [hidden] { display:none; }
+.supply-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+.item-uses { text-align:left; padding:8px 24px 18px; line-height:1.9; font-size:16px; }
+.project-card { margin:14px 0; padding:18px; border:1px solid #cad5df; border-radius:14px; background:#f1f6fb; text-align:left; }
+.project-card h3 { font-size:18px; color:#223d58; margin-bottom:8px; }
+.project-card p { font-size:16px; line-height:1.5; color:#415971; }
+.project-card ul { list-style:none; padding:10px 0; line-height:1.8; }
+.project-card li b { float:right; }
+button:disabled { opacity:.5; cursor:default; }
+button:focus-visible { outline:3px solid #45b8e8; outline-offset:3px; }
+@media(max-width:600px) { #build-detail {font-size:14px;max-height:65px;overflow:auto;} #build-actions {flex-wrap:wrap;} }
+#build-sheet { display:grid; grid-template-columns:minmax(0,1fr); width:min(920px,76vw); left:43%; gap:8px; }
+#build-detail {padding:2px 2px 0;max-width:none;}
+#build-pieces {max-width:100%;min-width:0;}
+#build-actions {flex-direction:row;justify-content:flex-end;}
+#build-actions .build-act {width:auto;}
+.piece-card {width:100px;min-height:86px;}
+.piece-name {font-size:14px;}
+.piece-cost {font-size:12px;}
+@media(max-height:600px){#build-detail{max-height:40px;overflow:auto;}.piece-card{min-height:70px;padding:4px;}.piece-icon{font-size:18px;}#build-actions .build-act{min-height:40px;height:40px;}#build-sheet{gap:4px;padding-top:6px;}}
+#build-pieces { touch-action:pan-x; overscroll-behavior-x:contain; }
+#overlay-card, .satchel-scroll {touch-action:pan-y;overscroll-behavior:contain;}
+@media(max-width:600px){#build-sheet{width:calc(100vw - 112px);left:10px;transform:translateY(110%);max-width:none;}#build-sheet.open{transform:translateY(0);}#build-actions{justify-content:flex-start;}.piece-card{width:90px;}}
