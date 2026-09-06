@@ -60,6 +60,7 @@ var Build = (function () {
   ];
   function isRoof(t) { return t === "roof" || t.indexOf("roof_") === 0; }
   function isFloor(t) { return ["floor", "stonefloor", "shellpath"].indexOf(t) >= 0; }
+  function isFurniture(t) {return ["tent","planter","lantern","bench","bed","flowerbox","crystallamp","moonlamp"].indexOf(t)>=0;}
   function isWall(t) { return ["wall", "window", "door", "brickwall"].indexOf(t) >= 0; }
   function rise(p) { return p.v ? STAIR_H : 1.36; }
   function pieceDef(id) { return PIECES.find(function (p) { return p.id === id; }); }
@@ -528,7 +529,7 @@ var Build = (function () {
   function duplicateAt(pose) {
     return pieces.some(function(p){
       if(pose.t === "bridge" && p.t === "bridge") return Math.hypot(p.x-pose.x,p.z-pose.z)<2.2 && Math.abs(p.y-pose.y)<0.6;
-      var same = p.t === pose.t || (isWall(p.t)&&isWall(pose.t)) || (isRoof(p.t)&&isRoof(pose.t)) || (isFloor(p.t)&&isFloor(pose.t));
+      var same = p.t === pose.t || (isWall(p.t)&&isWall(pose.t)) || (isRoof(p.t)&&isRoof(pose.t)) || (isFloor(p.t)&&isFloor(pose.t)) || (isFurniture(p.t)&&isFurniture(pose.t));
       return same && Math.abs(p.x-pose.x)<0.4 && Math.abs(p.z-pose.z)<0.4 && Math.abs(p.y-pose.y)<0.4;
     });
   }

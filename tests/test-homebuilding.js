@@ -42,6 +42,9 @@ const assert = require('assert');
         ck(t+' rotation '+r+' renders from above',ray.intersectObject(Build.pieces[0].mesh).length>0);
       }
     });
+    load([rec('floor',95,30,95),rec('bed',95,30.22,95)]);Build.setPiece('bench');
+    const furniturePose=Build.currentPose(aim(95,30.22,95,Build.pieces[0]));
+    ck('Furniture cannot occupy another furnishing',!furniturePose.valid&&/occupied/.test(furniturePose.reason));
     load([rec('door',95,30.22,94)]);pos.set(95,30.22,95.5);
     ck('Door opens',Build.toggleDoor(Build.pieces[0])&&Build.pieces[0].open);
     pos.set(95,30.22,94);
