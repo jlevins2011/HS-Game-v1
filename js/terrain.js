@@ -74,6 +74,7 @@ var Terrain = (function () {
 
   /* ---------------- island field ---------------- */
   function isletDefsFor(def) {
+    if (def.islets) return def.islets.map(function(it){return Object.assign({},it);});
     if (def.id === "skydock") return [];
     // two islets, seeded positions on opposite sides beyond the rim
     var a1 = hash2(3, 7) * Math.PI * 2;
@@ -110,6 +111,7 @@ var Terrain = (function () {
       if (f < 0.05) { H[i] = -999; continue; }
       var h = (def.base + (fbm(x, z) - 0.4) * def.amp * 2) * (0.55 + 0.45 * Math.min(1, f * 1.6));
       // gentle plateau near lightsprings so they sit on open ground
+      if(def.shapeHeight) h=def.shapeHeight(x,z,h);
       H[i] = Math.max(2.5, h);
     }
     // smooth pass to keep walking pleasant
@@ -352,7 +354,7 @@ var Terrain = (function () {
     x0 -= 1; z0 -= 1; x1 += 2; z1 += 2;
     var geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0, 1, 1);
     geo.rotateX(-Math.PI / 2);
-    var mat = new THREE.MeshLambertMaterial({ color: 0x54a2e8, transparent: true, opacity: 0.66 });
+    var mat = new THREE.MeshLambertMaterial({ color: currentDef.waterColor || 0x54a2e8, transparent: true, opacity: 0.66 });
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set((x0 + x1) / 2, currentDef.water, (z0 + z1) / 2);
     group.add(mesh);

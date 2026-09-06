@@ -855,7 +855,7 @@ var UI = (function () {
         (Store.data.player.isle === w.id ? " current" : "") + "' data-isle='" + w.id + "'>" +
         "<span class='world-emoji'>" + (locked ? "🔒" : w.emoji) + "</span>" +
         "<span class='world-name'>" + w.name + "</span>" +
-        "<span class='world-req'>" + (locked ? isleLockHint(w) : (Store.data.player.isle === w.id ? "You are here!" : "Tap to travel")) + "</span>" +
+        "<span class='world-req'>" + (locked ? isleLockHint(w) : (Store.data.player.isle === w.id ? "You are here!" : (w.description || "Tap to travel"))) + "</span>" +
         "</button>";
     });
     html += "</div><button class='ghost-btn' id='wl-back'>⬅️ BACK</button>";

@@ -298,6 +298,7 @@ var Game = (function () {
       });
       return;
     }
+    if (o.type === "sunwakebeacon") { Sunwake.interact(o); return; }
     if (o.type === "anchor") { anchorInfo(o); return; }
     if (o.type === "airship") { Objects.airshipTap(o, Player.position, !!p.tools.cloudcap); return; }
   }
@@ -652,6 +653,7 @@ var Game = (function () {
           wonderstone: "tap to answer!", chest: "tap to open!", spring: o.zone && o.zone.restored ? "healed & humming" : "tap to restore!",
           grottodoor: Store.data.player.tools.drill ? "tap to enter!" : "sealed — needs the drill",
           grottoexit: "tap to climb out", anchor: "tap to check",
+          sunwakebeacon: Store.isleState("sunwake").beaconRestored ? "shining over the lagoon" : "tap to restore the light",
           airship: Objects.airshipLabel(o, Player.position)
         };
         UI.setPrompt(o.def.icon, o.def.name + " · " + (labels[o.type] || "tap!"), null);

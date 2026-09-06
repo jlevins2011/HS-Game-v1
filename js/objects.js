@@ -52,7 +52,7 @@ var Objects = (function () {
       g.cone(0.95 * s, 1.8 * s, 5, 0x5c9c66, { x: x, y: y + 3.5 * s, z: z }, 0.25, 0.35);
       // snow dusting
       g.cone(0.55 * s, 0.8 * s, 5, 0xf4f8fc, { x: x, y: y + 4.6 * s, z: z }, 0.15, 0.3);
-    } else if (isle === "ambershore") {
+    } else if (isle === "ambershore" || P().palm) {
       // leaning palm with frond cones
       var lean = (Geo.hash(x * 3 + z) - 0.5) * 0.5;
       g.cyl(0.3 * s, 0.18 * s, 3.4 * s, 5, 0xa8815a, { x: x, y: y, z: z, rz: lean }, 0.2, 0.4);
@@ -646,9 +646,11 @@ var Objects = (function () {
     }
     function MAINRIMT(len) { return (MAIN_RADIUS() - 4) / len; }
 
+    if(def.populateExtras) def.populateExtras(add,scatter,rng);
+
     // keep the ground clear around doors and bridge anchors
     dynamics.forEach(function (d) {
-      if (d.type !== "anchor" && d.type !== "grottodoor" && d.type !== "spring") return;
+      if (d.type !== "anchor" && d.type !== "grottodoor" && d.type !== "spring" && d.type !== "sunwakebeacon") return;
       Object.keys(regions).forEach(function (key) {
         regions[key].list.forEach(function (o) {
           if (!o.gone && o.def.solid && Math.hypot(o.x - d.x, o.z - d.z) < 4) o.gone = true;

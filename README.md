@@ -205,3 +205,21 @@ rewards, pacing, and learning tuning. Content lives in `js/content/`.
 The engine (movement, physics, touch controls, TTS) is proven kid-tested code.
 Persistence is a thin layer (`js/store.js`) with whole-family
 export/import — a clean seam for cloud sync later.
+
+## Sunwake Atoll (2.6.0)
+
+Open the pause menu, choose Travel, and select Sunwake Atoll. The isle is
+available from level 1, with palm groves, a turquoise lagoon, two outer
+islets to bridge to, and a beacon to restore. Gather shells and glowcoral;
+bring 6 shells, 2 glass, and 2 glowdust to the beacon for a one-time reward
+of 12 sparks, 3 glimmer, and 30 light. Glass can be made at a kiln or bought
+through Trade & supplies. Shells and glowdust also support existing recipes.
+
+The world lives in `js/sunwake.js`, using optional terrain and population
+hooks. Older island seeds and object order stay unchanged. Beacon progress,
+harvested resources, and buildings use the existing per-isle save system.
+Education and shared-family services remain separate from the world module.
+
+Local verification: run `tests/test-sunwake.js` with the game served on port
+8905. It covers travel, land/water layout, gathering, beacon costs and rewards,
+repeat-reward protection, retention of an existing world, and saved reloads.
