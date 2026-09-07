@@ -371,6 +371,43 @@ var UI = (function () {
     });
   }
 
+  // Only new saves opt in. Older explorers keep their existing arrival flow.
+  function showFirstDiscovery() {
+    var save = Store.data, first = save.firstDiscovery;
+    if (!first || first.done) return;
+    clearTimeout(toastTimer);
+    $("toast").classList.remove("show");
+    var welcome = "You are a Keeper. Explore, build a home, and bring light back to the isles. Learning earns sparks to help your adventure.";
+    openOverlay("<div class='ch-title'>✨ Welcome, Keeper</div>" +
+      "<div class='ch-sub'>" + welcome + "</div>" +
+      "<div class='sentence-text'>First, earn your first sparks with a learning discovery. Take your time.</div>" +
+      "<button class='big-btn' id='first-begin'>✨ Begin my first discovery</button>" +
+      "<button class='ghost-btn' id='first-hear'>🔊 Read this to me</button>");
+    Activities.bindSpeak("first-hear", welcome + " First, tap Begin my first discovery.", .85);
+    $("first-begin").addEventListener("click", function () {
+      // Use the same assignments, activities, mastery and reports as world discoveries.
+      showChallenge("node", function (result) {
+        if (Store.data !== save || first.done) return;
+        if (result.nolesson || result.skipped || !result.correct) {
+          openOverlay("<div class='ch-title'>✨ Your discovery can wait</div><div class='ch-sub'>" +
+            (result.nolesson ? "There are no lessons ready for this explorer. A parent can choose lessons in Parents → Assignments." : "We can try another discovery when you are ready.") +
+            "</div><div class='ch-sub'>Come back through Menu → First discovery.</div><button class='big-btn' id='first-explore'>Explore the isle</button>");
+          $("first-explore").addEventListener("click", closeOverlay);
+          return;
+        }
+        first.done = true;
+        Game.grantSparks(5);
+        Game.grantXP(10);
+        Store.saveNow();
+        openOverlay("<div class='ch-title'>✨ Your learning earned 5 sparks!</div>" +
+          "<div class='ch-sub'>Wonderstones and island adventures hold more learning discoveries. Sparks help you buy supplies for your home.</div>" +
+          "<div class='sentence-text'>Next: find a tree and tap it to gather timber. Your building adventure begins there.</div>" +
+          "<button class='big-btn' id='first-explore'>Go find a tree</button>");
+        $("first-explore").addEventListener("click", closeOverlay);
+      }, "✨ First discovery · Learn to earn sparks");
+    });
+  }
+
   /* ---------------- challenge wrapper ---------------- */
   // context: "node" | "chest" | "craft" | "starfall" | "super"
   function showChallenge(context, onDone, intro) {
@@ -808,11 +845,13 @@ var UI = (function () {
       "<div class='ch-title'>PAUSED</div>" +
       "<div class='ch-sub version-line'>" + CONFIG.BRAND.name + " " + versionLabel() + "</div>" +
       paceLine +
+      (Store.data.firstDiscovery && !Store.data.firstDiscovery.done ? "<button class='big-btn' id='pm-first'>✨ FIRST DISCOVERY</button>" : "") +
       "<button class='big-btn' id='pm-resume'>▶️ KEEP PLAYING</button>" +
       "<button class='big-btn' id='pm-isles'>🗺️ TRAVEL TO AN ISLE</button>" +
       "<button class='big-btn' id='pm-home'>🏠 SWITCH EXPLORER</button>" +
       "<button class='ghost-btn hold-btn' id='pm-parent'>🗝️ PARENTS (hold)</button>";
     openOverlay(html);
+    if ($("pm-first")) $("pm-first").addEventListener("click", showFirstDiscovery);
     $("pm-resume").addEventListener("pointerdown", closeOverlay);
     $("pm-isles").addEventListener("pointerdown", showIsles);
     $("pm-home").addEventListener("pointerdown", function () {
@@ -997,7 +1036,7 @@ var UI = (function () {
     showBuildSheet: showBuildSheet, hideBuildSheet: hideBuildSheet, updateBuildSheet: updateBuildSheet,
     showChallenge: showChallenge, showDialogue: showDialogue,
     showProjects:showProjects, showMarket:showMarket, showInventory: showInventory, toggleInventory: toggleInventory,
-    showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
+    showFirstDiscovery: showFirstDiscovery, showLevelUp: showLevelUp, showPause: showPause, showHome: showHome, hideHome: hideHome,
     showNewExplorer: showNewExplorer, setJumpGlyph: setJumpGlyph,
     rankFor: rankFor, xpNeeded: xpNeeded, nextCraftInfo: nextCraftInfo, showWorkshop: showWorkshop,
     versionLabel: versionLabel,

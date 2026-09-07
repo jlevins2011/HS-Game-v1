@@ -521,7 +521,8 @@ var Store = (function () {
   function load(p) {
     prof = p;
     activeKey = SAVE_PREFIX + p.id;
-    data = normalizeSave(lsGet(activeKey), p, activeKey) || freshData();
+    data = normalizeSave(lsGet(activeKey), p, activeKey);
+    if (!data) { data = freshData(); data.firstDiscovery = { done: false }; }
     Store.data = data;
     Store.profile = prof;
   }
@@ -543,7 +544,7 @@ var Store = (function () {
   function reset(pid) {
     var key = SAVE_PREFIX + pid;
     lsDel(key);
-    if (activeKey === key) { data = freshData(); Store.data = data; }
+    if (activeKey === key) { data = freshData(); data.firstDiscovery = { done: false }; Store.data = data; }
   }
 
   function peek(p) {

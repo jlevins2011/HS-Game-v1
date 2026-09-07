@@ -107,6 +107,7 @@ var Game = (function () {
     UI.updateQuestHud();
     UI.updateHotbar();   // a child who loads in with materials sees the bench right away
     Reports.maybeAutoSend();
+    UI.showFirstDiscovery();
   }
 
   function stop() {

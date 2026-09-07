@@ -36,7 +36,8 @@ const pw = require('playwright-core');
   await page.waitForTimeout(2800);
 
   /* ---- never held back ---- */
-  await page.evaluate(()=>{ Store.data.stats.lastChallengeAt = Date.now(); });
+  // This suite exercises returning explorers; fresh arrival is covered separately.
+  await page.evaluate(()=>{ delete Store.data.firstDiscovery; Store.data.stats.lastChallengeAt = Date.now(); });
   const r = await page.evaluate(()=>new Promise(res=>{ UI.showChallenge('node', function(x){ res(x); }, 'T'); setTimeout(()=>res({opened:document.getElementById('overlay').classList.contains('open')}),250); }));
   ck('a wonderstone opens immediately even seconds after the last question', r.opened===true, JSON.stringify(r));
   await page.evaluate(()=>UI.closeOverlay());

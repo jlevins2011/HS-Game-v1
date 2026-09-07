@@ -223,3 +223,19 @@ Education and shared-family services remain separate from the world module.
 Local verification: run `tests/test-sunwake.js` with the game served on port
 8905. It covers travel, land/water layout, gathering, beacon costs and rewards,
 repeat-reward protection, retention of an existing world, and saved reloads.
+
+## First discovery (2.6.1)
+
+A fresh explorer enters with a short Keeper introduction and one action: Begin
+my first discovery. This opens an activity through the existing learning
+scheduler, using that child's assigned curricula and normal mastery/reporting.
+Completing it earns 5 sparks and 10 light, then suggests gathering timber.
+There is no new timer. Existing saves bypass the introduction; each new
+explorer saves completion independently. A skipped or unavailable lesson earns
+nothing and can be retried through Menu → First discovery.
+
+To verify: add a fresh explorer with lessons assigned, enter the world, and
+tap Begin my first discovery. Answer the real activity, see the earned sparks,
+then return to exploring. Reload to confirm it does not repeat; add a sibling
+to confirm their introduction is independent. `tests/test-first-discovery.js`
+checks these paths, including mistakes, reporting and no assigned lessons.
