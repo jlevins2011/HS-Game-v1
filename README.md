@@ -239,3 +239,22 @@ tap Begin my first discovery. Answer the real activity, see the earned sparks,
 then return to exploring. Reload to confirm it does not repeat; add a sibling
 to confirm their introduction is independent. `tests/test-first-discovery.js`
 checks these paths, including mistakes, reporting and no assigned lessons.
+
+## Asterfall Observatory (2.7.0)
+
+Earn level 12, then select Asterfall Observatory in Menu → Travel. The travel
+menu and game travel entry point both enforce its level requirement.
+Follow the gold waystones up the terraces to the celestial instrument.
+Visit the Jade, Violet and Amber lenses and complete one assigned learning
+discovery at each; the usual mastery and reporting systems record the work.
+No timer or material charge applies to lens attempts. Skipped or unavailable
+lessons do not align a lens.
+
+Return with 6 glimmer, 4 glass and 2 starstone to awaken the moving rings and
+earn 40 sparks, 6 aurorium and 60 light once. Crystals and starstone veins
+grow on the isle; starstone requires a skysteel mallet, and glass comes from
+a kiln or Trade & supplies. Two outer islets provide bridge destinations.
+The expedition and rewards save separately for each explorer.
+
+`tests/test-asterfall.js` exercises the level boundary, terrain routes, bridge
+anchors, all three real lessons, restoration costs, rewards and reloads.

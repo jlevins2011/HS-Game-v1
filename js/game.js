@@ -71,6 +71,11 @@ var Game = (function () {
 
   /* ---------------- isle travel / start ---------------- */
   function travelTo(isleId) {
+    var destination = ISLE_DEFS.find(function(w){return w.id === isleId;});
+    if (destination && destination.requireEarnedLevel && Store.data.player.level < destination.level) {
+      UI.toast("Earn light to reach level " + destination.level + " and unlock " + destination.name + ".", 3500);
+      return false;
+    }
     Store.data.player.isle = isleId;
     Store.save();
     currentIsleState = Store.isleState(isleId);
@@ -85,7 +90,7 @@ var Game = (function () {
     Player.spawnAt(sx, sz, def.spawn && def.spawn.yaw);
     NPCs.placeAll(sx, sz);
     Creatures.populate();
-    UI.toast(def.emoji + " Welcome to " + def.name + "!");
+    UI.toast(def.emoji + " Welcome to " + def.name + "!" + (def.arrivalHint ? " " + def.arrivalHint : ""), def.arrivalHint ? 5500 : 2600);
     GameAudio.say("Welcome to " + def.name + "!");
     UI.updateHud();
   }
@@ -101,7 +106,7 @@ var Game = (function () {
     var grace = CONFIG.LEARN.nudgeGraceSec * 1000;
     var gapMs = Learning.nudgeMs();
     lastEdu = gapMs > 0 ? Math.max(last, Date.now() - gapMs + grace) : Date.now();
-    travelTo(Store.data.player.isle || "meadowmere");
+    if (travelTo(Store.data.player.isle || "meadowmere") === false) travelTo("meadowmere");
     Controls.setEnabled(true);
     UI.updateHud();
     UI.updateQuestHud();
@@ -299,6 +304,7 @@ var Game = (function () {
       });
       return;
     }
+    if (o.type === "asterlens" || o.type === "astercore") { Asterfall.interact(o); return; }
     if (o.type === "sunwakebeacon") { Sunwake.interact(o); return; }
     if (o.type === "anchor") { anchorInfo(o); return; }
     if (o.type === "airship") { Objects.airshipTap(o, Player.position, !!p.tools.cloudcap); return; }
@@ -654,6 +660,8 @@ var Game = (function () {
           wonderstone: "tap to answer!", chest: "tap to open!", spring: o.zone && o.zone.restored ? "healed & humming" : "tap to restore!",
           grottodoor: Store.data.player.tools.drill ? "tap to enter!" : "sealed — needs the drill",
           grottoexit: "tap to climb out", anchor: "tap to check",
+          asterlens: "tap to align this lens",
+          astercore: "tap to view your expedition",
           sunwakebeacon: Store.isleState("sunwake").beaconRestored ? "shining over the lagoon" : "tap to restore the light",
           airship: Objects.airshipLabel(o, Player.position)
         };

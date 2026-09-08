@@ -648,12 +648,17 @@ var Objects = (function () {
 
     if(def.populateExtras) def.populateExtras(add,scatter,rng);
 
+    // Optional authored paths on new worlds preserve older population layouts.
+    if (def.clearGround) Object.keys(regions).forEach(function(key){
+      regions[key].list.forEach(function(o){if(o.def.solid && def.clearGround(o.x,o.z))o.gone=true;});
+    });
+
     // keep the ground clear around doors and bridge anchors
     dynamics.forEach(function (d) {
-      if (d.type !== "anchor" && d.type !== "grottodoor" && d.type !== "spring" && d.type !== "sunwakebeacon") return;
+      if (d.type !== "anchor" && d.type !== "grottodoor" && d.type !== "spring" && d.type !== "sunwakebeacon" && !d.def.clearRadius) return;
       Object.keys(regions).forEach(function (key) {
         regions[key].list.forEach(function (o) {
-          if (!o.gone && o.def.solid && Math.hypot(o.x - d.x, o.z - d.z) < 4) o.gone = true;
+          if (!o.gone && o.def.solid && Math.hypot(o.x - d.x, o.z - d.z) < (d.def.clearRadius || 4)) o.gone = true;
         });
       });
     });
