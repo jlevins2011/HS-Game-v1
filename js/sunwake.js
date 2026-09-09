@@ -61,6 +61,7 @@ var Sunwake = (function () {
   Objects.TYPES.sunwakecoral={name:"Glowcoral",icon:"🪸",taps:2,drops:{glowdust:2},rayR:1,rayY:.6,regrow:240,build:coral,verb:"gather"};
   Objects.TYPES.sunwakebeacon={name:"Sunwake Beacon",icon:"☀️",dynamic:beacon,rayR:1.6,rayY:1.8,special:"sunwakebeacon",solid:1.3};
   var COST={shell:6,glass:2,glowdust:2};
+  Economy.registerUse("Sunwake Beacon",COST);
   function restore(o) {
     if(Terrain.def.id!=="sunwake" || o.type!=="sunwakebeacon")return false;
     var state=Store.isleState("sunwake");

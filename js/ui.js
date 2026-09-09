@@ -188,6 +188,7 @@ var UI = (function () {
 
     var malletNames = ["Timber Mallet", "Stone Mallet", "Skysteel Mallet", "Starstone Mallet"];
     var toolsHtml = "<div class='inv-tools'>" +
+      (Economy.picnicCharges()>0 ? "<span class='inv-tool'>🥧 Picnic bonus: " + Economy.picnicCharges() + " gathers left</span>" : "") +
       "<span class='inv-tool'>🔨 " + malletNames[p.toolTier] + "</span>" +
       (p.tools.hatchet ? "<span class='inv-tool'>🪓 Hatchet</span>" : "") +
       (p.tools.brush ? "<span class='inv-tool'>🖌️ Brush</span>" : "") +
@@ -201,7 +202,7 @@ var UI = (function () {
 
     var groupsHtml = "";
     var known=SATCHEL_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
-    var groups=SATCHEL_GROUPS.concat([{name:"Other keepsakes",items:Object.keys(inv).filter(function(k){return known.indexOf(k)<0;})}]);
+    var groups=SATCHEL_GROUPS.concat([{name:"Supplies from earlier adventures",items:Object.keys(inv).filter(function(k){return known.indexOf(k)<0;})}]);
     groups.forEach(function (grp) {
       var have = grp.items.filter(function (k) { return (inv[k] || 0) > 0; });
       if (!have.length) return;
@@ -245,12 +246,22 @@ var UI = (function () {
 
   function safeText(s) {return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
   function showItem(item) {
+    clearTimeout(toastTimer);$("toast").classList.remove("show");
     var inv=Store.data.player.inventory,uses=Economy.uses(item),value=Economy.VALUES[item];
+    var buildPiece=Build.PIECES.find(function(p){return p.cost[item];}),have=(inv[item]||0)>0;
     openOverlay("<div class='ch-title'>"+safeText(item)+" · "+(inv[item]||0)+"</div>"+
       "<div class='ch-sub'>Used for</div><ul class='item-uses'>"+(uses.length?uses.map(function(u){return "<li>"+safeText(u)+"</li>";}).join(""):"<li>A keepsake from an earlier adventure.</li>")+"</ul>"+
-      (value?"<button class='big-btn' id='item-sell'>Trade 1 for "+value+" sparks</button>":"")+
+      (item==="berry tart"?"<button class='big-btn' id='item-eat' "+(!have||Economy.picnicCharges()>0?"disabled":"")+">"+(Economy.picnicCharges()>0?"Picnic bonus: "+Economy.picnicCharges()+" gathers left":"Enjoy a berry tart")+"</button>":"")+
+      (Economy.RECLAIM[item]?"<button class='big-btn' id='item-reclaim' "+(!have?"disabled":"")+">Reclaim 1 into supplies</button>":"")+
+      (buildPiece?"<button class='big-btn' id='item-build'>Build with this material</button>":"")+
+      (value?"<button class='big-btn' id='item-sell' "+(!have?"disabled":"")+">Trade 1 for "+value+" sparks</button>":"")+
+      (value&&(inv[item]||0)>=5?"<button class='ghost-btn' id='item-sell-five'>Trade 5 for "+(value*5)+" sparks</button>":"")+
       "<button class='ghost-btn' id='item-back'>Back to satchel</button>");
     $("item-back").addEventListener("click",showInventory);
+    if($("item-eat"))$("item-eat").addEventListener("click",function(){if(Economy.eatTart()){GameAudio.sfx.spark();showItem(item);}});
+    if($("item-reclaim"))$("item-reclaim").addEventListener("click",function(){if(Economy.reclaim(item)){Store.saveNow();updateHotbar();updateQuestHud();showInventory();toast("Supplies reclaimed — ready for your next project.");}});
+    if($("item-build"))$("item-build").addEventListener("click",function(){closeOverlay();Build.enterMode();Build.setPiece(buildPiece.id);updateModeButton();showBuildSheet();});
+    if($("item-sell-five"))$("item-sell-five").addEventListener("click",function(){if(Economy.sell(item,5)){updateHud();updateHotbar();updateQuestHud();showItem(item);}});
     if($("item-sell"))$("item-sell").addEventListener("click",function(){if(Economy.sell(item,1)){GameAudio.sfx.spark();updateHud();updateHotbar();updateQuestHud();showItem(item);}});
   }
   function showMarket() {

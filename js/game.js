@@ -222,12 +222,13 @@ var Game = (function () {
     if (res.done) {
       Stats.recordGather();
       grantXP(CONFIG.REWARDS.gatherXP);
+      var picnic = Economy.applyPicnic(res.drops);
       var parts = [];
       Object.keys(res.drops).forEach(function (k) {
         grantItem(k, res.drops[k]);
         parts.push("+" + res.drops[k] + " " + (ITEM_ICON[k] || "") + " " + k);
       });
-      UI.gainPopup(parts.join("   "));
+      UI.gainPopup(parts.join("   ") + (picnic ? "   🥧 Picnic bonus · " + Economy.picnicCharges() + " left" : ""));
       if (res.drops.aurorium) { grantSparks(2); grantXP(5); UI.toast("🌈 AURORIUM! Super rare!"); }
       else if (res.drops.moonpearl) { grantSparks(1); UI.toast("🌙 Moonpearl! +1 spark"); }
       if (res.drops["skysteel ore"] && !p.tools.kiln && (p.inventory["skysteel ore"] || 0) <= 2) {
@@ -311,6 +312,7 @@ var Game = (function () {
   }
 
   /* ---------------- Lightspring restoration ---------------- */
+  Economy.registerUse("Lightspring restoration", springCost);
   function springCost() {
     var lvl = Store.data.player.level;
     return lvl >= 6 ? { timber: 8, stone: 6, glowmoss: 1 } :

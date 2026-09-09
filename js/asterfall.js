@@ -7,6 +7,7 @@ var Asterfall = (function () {
     {name:"Amber Lens",color:0xffd17e,x:96,z:123}
   ];
   var COST={glimmer:6,glass:4,starstone:2};
+  Economy.registerUse("Asterfall Observatory · level 12",COST);
   function state(){return Store.isleState("asterfall");}
   function aligned(i){return !!(state().lenses || [])[i];}
   function count(){return LENSES.filter(function(_,i){return aligned(i);}).length;}

@@ -62,10 +62,37 @@ var KILN = [
     return exchange(needs,{},VALUES[item]*count,"Sold "+count+" "+item);
   }
   function buy(id) {var s=SUPPLIES.find(function(x){return x.id===id;});return !!s&&exchange({},s.gives,-s.price,"Bought "+s.name);}
+  var RECLAIM = {
+    bucket:{skysteel:1}, "water bucket":{skysteel:1},
+    rope:{fluff:2}, lantern:{glass:1,emberstone:2}
+  };
+  var extraUses=[];
+  function registerUse(name,needs){extraUses.push({name:name,needs:needs});}
+  function reclaim(item){
+    if(!Object.prototype.hasOwnProperty.call(RECLAIM,item))return false;
+    var needs={};needs[item]=1;
+    return exchange(needs,RECLAIM[item],0,"Reclaimed "+item);
+  }
+  function picnicCharges(){var n=Store.data.player.picnicCharges;return validCount(n)?n:0;}
+  function eatTart(){
+    if(picnicCharges()>0 || !exchange({"berry tart":1},{},0,"Enjoyed a berry tart"))return false;
+    Store.data.player.picnicCharges=10;Store.saveNow();return true;
+  }
+  // Only completed timber/stone gathering spends a charge, never travel or time.
+  function applyPicnic(drops){
+    var item=drops.timber>0?"timber":drops.stone>0?"stone":null;
+    if(!item || picnicCharges()<1)return false;
+    drops[item]+=1;Store.data.player.picnicCharges=picnicCharges()-1;Store.save();return true;
+  }
   function uses(item) {
     var out=[];
     if(window.Build) Build.PIECES.forEach(function(p){if(p.cost[item])out.push(p.name);});
-    CRAFTS.concat(WORKSHOP,KILN).forEach(function(r){if(r.needs[item])out.push(r.name);});
+    CRAFTS.concat(WORKSHOP).forEach(function(r){if(r.needs[item])out.push(r.name+" · Tinker"+(r.level?" · level "+r.level:""));});
+    KILN.forEach(function(r){if(r.needs[item])out.push(r.name+" · Kiln (learn from Wren)");});
+    extraUses.forEach(function(r){var needs=typeof r.needs==="function"?r.needs():r.needs;if(needs[item])out.push(r.name+" ("+needs[item]+" needed)");});
+    if(item==="berry tart")out.push("enjoy a picnic: +1 timber or stone on your next 10 completed gathers; no time limit");
+    if(RECLAIM[item])out.push("reclaim as "+Object.keys(RECLAIM[item]).map(function(k){return RECLAIM[item][k]+" "+k;}).join(" + "));
+    if(window.Quests && Quests.usesItem(item))out.push("requests from island villagers");
     if(item.indexOf("seeds")>=0)out.push("plant in a Planter");
     if(VALUES[item])out.push("trade for "+VALUES[item]+" sparks each");
     return out;
@@ -86,5 +113,6 @@ var KILN = [
     if(!d.projects)d.projects={};d.projects[id]=true;Store.save();return true;
   }
   return {CRAFTS:CRAFTS,WORKSHOP:WORKSHOP,KILN:KILN,VALUES:VALUES,SUPPLIES:SUPPLIES,
+    RECLAIM:RECLAIM,reclaim:reclaim,registerUse:registerUse,eatTart:eatTart,picnicCharges:picnicCharges,applyPicnic:applyPicnic,
     canAfford:canAfford,exchange:exchange,sell:sell,buy:buy,uses:uses,PROJECTS:PROJECTS,projectProgress:projectProgress,claim:claim};
 })();

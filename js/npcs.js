@@ -320,5 +320,5 @@ var Quests = (function () {
     UI.updateHotbar();
   }
 
-  return { active: active, pickQuest: pickQuest, start: start, isComplete: isComplete, finish: finish };
+  return { usesItem:function(item){return QUEST_DEFS.some(function(q){return q.ask===item;});}, active: active, pickQuest: pickQuest, start: start, isComplete: isComplete, finish: finish };
 })();

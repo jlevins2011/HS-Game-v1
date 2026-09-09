@@ -258,3 +258,21 @@ The expedition and rewards save separately for each explorer.
 
 `tests/test-asterfall.js` exercises the level boundary, terrain routes, bridge
 anchors, all three real lessons, restoration costs, rewards and reloads.
+
+## Useful finds and picnic supplies (2.7.1)
+
+In the satchel, select a berry tart and choose Enjoy a berry tart. It adds
+one timber or stone to the next ten completed timber/stone gathers. Other
+resources, unfinished swings, travel and elapsed time do not spend it.
+The remaining bonus saves per explorer, appears in the satchel and cannot
+be stacked by accidentally eating another tart.
+
+Old inventory buckets and water buckets can each be reclaimed into one
+skysteel; rope becomes two fluff; inventory lanterns become one glass and
+two emberstone. This is an explicit action, preserving keepsakes until the
+player chooses it. Placed lanterns and the lantern kit are unaffected.
+
+Item cards now include registered restoration costs and villager request
+uses, Tinker/Kiln guidance, a building shortcut, and an option to trade five
+items together. `tests/test-item-finish.js` verifies the real gathering path,
+reclamation, saved bonus, catalog use coverage and explorer isolation.
