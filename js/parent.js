@@ -70,6 +70,13 @@ var Parent = (function () {
     else render();
   }
 
+  function authorize(onOk, onCancel) {
+    armOnNextTouch();
+    var pin = Store.family.settings.pin;
+    if (pin) showPinGate(pin, onOk, onCancel);
+    else onOk();
+  }
+
   function gradeLabel(g) { return CONFIG.GRADE_LABELS[g] || ("Grade " + g); }
   function gradeShort(g) { return g === "K" ? "K" : "Gr " + g; }
 
@@ -205,6 +212,11 @@ var Parent = (function () {
           Reports.fmtMinutes(save.stats.playMs) + " this week · " +
           save.stats.lifetime.challenges + " lifetime challenges"
         : "Hasn't played yet";
+      if (save && window.Expeditions) {
+        var ex = Expeditions.summary(save);
+        line += " · " + ex.completed + "/" + ex.started + " expeditions" +
+          (ex.avgSessionMin ? " · ~" + ex.avgSessionMin + " min/session" : "");
+      }
       var pace = Store.nudgeMinutes(p.id);
       var plan = Store.gradePlanFor(p.id);
       var planBits = CONFIG.SUBJECTS.map(function (sd) {
@@ -1170,5 +1182,5 @@ var Parent = (function () {
     });
   }
 
-  return { show: show, showSetup: showSetup };
+  return { show: show, showSetup: showSetup, authorize: authorize };
 })();

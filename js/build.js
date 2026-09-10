@@ -586,6 +586,7 @@ var Build = (function () {
     isleState.pieces.push(rec);
     Store.save();
     Stats.recordBuild();
+    if (window.Expeditions) Expeditions.record("build", 1, { piece: rec.t });
     GameAudio.sfx.place();
     if (rec.t === "tent" || rec.t === "bed") UI.toast("⛺ Camp set! If you fall, you'll wake up here.", 2600);
     Game.checkBridges();

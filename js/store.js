@@ -608,6 +608,8 @@ var Store = (function () {
 
 /* ================= STATS ================= */
 var Stats = (function () {
+  var sessionStart = 0;
+  var sessionProfile = null;
   function todayKey() {
     var d = new Date();
     return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
@@ -646,6 +648,21 @@ var Stats = (function () {
     lastTick = now;
   }
 
+  function startSession() {
+    sessionStart = Date.now();
+    sessionProfile = Store.profile && Store.profile.id;
+  }
+  function endSession() {
+    if (!sessionStart || !Store.profile || Store.profile.id !== sessionProfile) return;
+    var duration = Math.max(0, Date.now() - sessionStart);
+    var sessions = Store.data.stats.sessions || { count:0, totalMs:0 };
+    sessions.count += 1;
+    sessions.totalMs += duration;
+    Store.data.stats.sessions = sessions;
+    sessionStart = 0; sessionProfile = null;
+    Store.saveNow();
+  }
+
   // reset the weekly window after a report; mastery persists (it is
   // long-term memory), only the week counters roll.
   function rollWeek() {
@@ -660,6 +677,6 @@ var Stats = (function () {
   return {
     recordChallenge: recordChallenge, recordGather: recordGather, recordBuild: recordBuild,
     recordQuest: recordQuest, recordSparks: recordSparks, recordHarvest: recordHarvest,
-    tickPlaytime: tickPlaytime, rollWeek: rollWeek
+    tickPlaytime: tickPlaytime, startSession:startSession, endSession:endSession, rollWeek: rollWeek
   };
 })();

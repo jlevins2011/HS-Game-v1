@@ -276,3 +276,35 @@ Item cards now include registered restoration costs and villager request
 uses, Tinker/Kiln guidance, a building shortcut, and an option to trade five
 items together. `tests/test-item-finish.js` verifies the real gathering path,
 reclamation, saved bonus, catalog use coverage and explorer isolation.
+
+## Keeper Expeditions and Field Journal (2.8.0)
+
+The compass below the HUD opens three voluntary 5–10 minute adventure paths:
+Whispering Wilds, The Keeper's Hearth, and Starlight Trail. Each reveals one
+step at a time and connects gathering, creatures or building with a challenge
+from the explorer's assigned lessons. There are no deadlines or daily streaks.
+Progress survives travel and reloads.
+
+Completed expeditions award 10 sparks, 20 light, and one of six guaranteed
+Field Journal discoveries. Each trail awards its two discoveries in order, so
+the player does not lose a completion to a random duplicate. An expedition
+completed on an isle also leaves a small Keeper marker near that isle's arrival
+point on the next visit. After a journal entry is earned, a grown-up can hold
+the postcard action and pass the Parents gate to save a personalized PNG.
+
+Every regular overlay now receives a compact **Read this screen** control. It
+speaks instructions and action labels without reading answer choices. In an
+independent decoding activity it deliberately excludes the target word. The
+NPC request HUD and selected building description can also be tapped to hear
+them. The controls use the existing on-device speech layer and store no voice
+data.
+
+Expedition starts, progress and completions emit `lumen:expedition-*` browser
+events for a future shared family service. Local saves track starts,
+completions, abandoned choices, duration, journal discoveries, and session
+length without adding an account or telemetry service. Parents see completion
+and average-session summaries per explorer.
+
+`tests/test-expeditions.js` covers choice, staged progress, a real lesson,
+rewards, non-duplicate discoveries, postcards, isle markers, reloads,
+read-aloud answer safety, session metrics, and sibling isolation.

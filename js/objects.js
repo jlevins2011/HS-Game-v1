@@ -647,6 +647,7 @@ var Objects = (function () {
     function MAINRIMT(len) { return (MAIN_RADIUS() - 4) / len; }
 
     if(def.populateExtras) def.populateExtras(add,scatter,rng);
+    if(window.Expeditions) Expeditions.populate(add,def);
 
     // Optional authored paths on new worlds preserve older population layouts.
     if (def.clearGround) Object.keys(regions).forEach(function(key){

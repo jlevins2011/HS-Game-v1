@@ -19,7 +19,13 @@ const pw = require('playwright-core');
   await page.waitForTimeout(1200);
   const btns=await page.$$('#player-buttons button'); const nb=await btns[btns.length-1].boundingBox();
   await tap(nb.x+nb.width/2,nb.y+nb.height/2); await page.waitForTimeout(300);
-  await page.fill('#ne-name','Sky'); await tapSel('#ne-go'); await page.waitForTimeout(350); await tapSel('#ho-skip'); await page.waitForTimeout(2800);
+  await page.fill('#ne-name','Sky'); await tapSel('#ne-go'); await page.waitForTimeout(350); await tapSel('#ho-skip');
+  await page.evaluate(() => {
+    Store.data.firstDiscovery = { done: true };
+    Store.saveNow();
+    UI.closeOverlay();
+  });
+  await page.waitForTimeout(2800);
 
   // a fall from high up, measured over one second before the ground arrives, with and without the cap
   const drop = async (cap, hold) => {

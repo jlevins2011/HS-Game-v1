@@ -1,5 +1,5 @@
 const {spawnSync}=require('child_process');
-const tests=process.argv.length>2?process.argv.slice(2):['audio-tts.test.js','test-migration.js','test-setup.js','test-editor.js','test-glider.js','test-nudge.js','test-balloon.js','test-letters.js','test-spell-live.js'];
+const tests=process.argv.length>2?process.argv.slice(2):['audio-tts.test.js','test-migration.js','test-setup.js','test-editor.js','test-glider.js','test-nudge.js','test-balloon.js','test-letters.js','test-spell-live.js','test-expeditions.js'];
 let failed=0;
 for(const test of tests){
   const r=spawnSync(process.execPath,['tests/'+test],{encoding:'utf8',env:process.env,timeout:180000});

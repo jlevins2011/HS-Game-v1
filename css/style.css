@@ -133,6 +133,16 @@ button { font-family: inherit; }
   padding: 8px 14px; border-radius: 999px; max-width: 68vw;
 }
 
+#expedition-hud {
+  position: absolute; top: calc(env(safe-area-inset-top, 8px) + 82px); left: 10px;
+  max-width: min(74vw, 360px); min-height: 40px; padding: 8px 14px;
+  border: 2px solid rgba(255,255,255,.38); border-radius: 16px;
+  background: rgba(38, 50, 82, .78); color: #fff3bd;
+  font-size: 13px; font-weight: 800; text-align: left; cursor: pointer; z-index: 20;
+  box-shadow: 0 4px 12px rgba(12,18,38,.2);
+}
+#quest-hud[style*="flex"] + #expedition-hud { top: calc(env(safe-area-inset-top, 8px) + 94px); }
+
 #crosshair {
   top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 22px; height: 22px; pointer-events: none; opacity: .8;
@@ -255,6 +265,17 @@ button { font-family: inherit; }
 }
 .speak-btn:active { transform: translateY(4px); box-shadow: none; }
 .speak-btn.small { width: auto; height: auto; border-radius: 14px; font-size: 14px; font-weight: 700; padding: 12px 18px; }
+.screen-read-btn {
+  width: auto; min-height: 40px; margin: 0 0 12px; padding: 9px 14px;
+  border: 2px solid #93b9de; border-radius: 14px; background: #e6f3ff;
+  color: #315b82; font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.expedition-step { text-align:left; margin:10px 0; padding:12px 14px; border-radius:14px; background:#eee7d8; color:#736850; font-weight:700; }
+.expedition-step.active { background:#fff; border:3px solid #e1c36f; color:#3a2e18; }
+.expedition-step.done { background:#e0f1dc; color:#3f6d48; }
+.journal-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
+.journal-relic { padding:14px 8px; border-radius:14px; background:#fff; border:2px solid #dfd2b5; font-weight:800; color:#3a4a68; }
+.journal-relic.locked { filter:grayscale(1); opacity:.48; }
 /* pulses for a moment after a tap so the child can see it registered even
    before the voice starts */
 .speak-btn.speaking { animation: speakPulse 0.65s ease-out; }

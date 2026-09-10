@@ -72,6 +72,20 @@ var UI = (function () {
       (have >= q.count ? "  ✅ Go see " + q.giver + "!" : "");
   }
 
+  function screenReadText() {
+    var card = $("overlay-card");
+    if (!card) return "";
+    var selectors = ".ch-title,.ch-sub,.sentence-text,.rank-name,.item-uses li,.world-name,.world-req,.pr-section p,.pr-section label,.pr-section h3,button:not(.word-block):not(.letter-tile):not(.avatar-btn):not(.picture-hero):not(.speak-btn):not(.screen-read-btn)";
+    var seen = [];
+    Array.prototype.forEach.call(card.querySelectorAll(selectors), function (el) {
+      if (el.closest(".no-screen-read") || el.offsetParent === null) return;
+      if (el.matches("button") && el.querySelector(".world-name,.world-req,.ch-title,.ch-sub,.sentence-text")) return;
+      var value = (el.textContent || "").replace(/\s+/g, " ").trim();
+      if (value && seen.indexOf(value) < 0) seen.push(value);
+    });
+    return seen.join(". ");
+  }
+
   /* ---------------- contextual prompt (replaces crosshair feedback) ---------------- */
   var promptShown = false;
   function setPrompt(icon, text, frac) {
@@ -115,7 +129,10 @@ var UI = (function () {
   }
   function updateBuildSheet() {
     var selected=Build.pieceDef(Build.activePiece);
-    if($("build-detail")) $("build-detail").textContent=Build.removeMode?"Remove a piece to recover its materials.":selected.name+" · "+selected.desc;
+    if($("build-detail")) {
+      $("build-detail").textContent="🔊 "+(Build.removeMode?"Remove a piece to recover its materials.":selected.name+". "+selected.desc);
+      $("build-detail").setAttribute("aria-label", "Tap to hear the selected building piece");
+    }
     ["roof-down","roof-up"].forEach(function(id){if($(id))$(id).hidden=!Build.isRoof(Build.activePiece);});
     var sheet = $("build-pieces");
     if (!sheet || !$("build-sheet").classList.contains("open")) return;
@@ -553,7 +570,18 @@ var UI = (function () {
   /* ---------------- generic overlay ---------------- */
   function openOverlay(html) {
     Controls.setEnabled(false);
+    clearTimeout(toastTimer);
+    $("toast").classList.remove("show");
     $("overlay-card").innerHTML = html;
+    var read = document.createElement("button");
+    read.type = "button";
+    read.className = "screen-read-btn";
+    read.textContent = "🔊 Read this screen";
+    read.setAttribute("aria-label", "Read the words on this screen aloud");
+    var title = $("overlay-card").querySelector(".ch-title");
+    if (title && title.nextSibling) title.parentNode.insertBefore(read, title.nextSibling);
+    else $("overlay-card").insertBefore(read, $("overlay-card").firstChild);
+    Activities.bindSpeak(read.id = "screen-read", screenReadText, .86);
     $("overlay").classList.add("open");
   }
   function closeOverlay() {
@@ -1018,7 +1046,10 @@ var UI = (function () {
     document.addEventListener("pointerdown", function () { GameAudio.unlock(); }, true);
     $("btn-pause").addEventListener("pointerdown", function (e) { e.stopPropagation(); showPause(); });
     $("btn-bag").addEventListener("pointerdown", function (e) { e.stopPropagation(); showInventory(); });
+    $("expedition-hud").addEventListener("pointerdown", function (e) { e.stopPropagation(); Expeditions.show(); });
     $("btn-mode").addEventListener("pointerdown", function (e) { e.stopPropagation(); Game.toggleMode(); });
+    $("build-detail").addEventListener("pointerdown", function(e){e.stopPropagation();GameAudio.say($("build-detail").textContent.replace("🔊","").trim(),.86);});
+    $("quest-hud").addEventListener("pointerdown", function(e){e.stopPropagation();GameAudio.say($("quest-hud-text").textContent,.86);});
     $("btn-craft").addEventListener("pointerdown", function (e) { e.stopPropagation(); showWorkshop(); });
     $("btn-kiln").addEventListener("pointerdown", function (e) { e.stopPropagation(); doKiln(); });
     var jb = $("btn-jump");

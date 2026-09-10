@@ -186,6 +186,7 @@ var Creatures = (function () {
       GameAudio.sfx.pop();
       Game.grantItem("fluff", 2);
       Game.grantXP(2);
+      if (window.Expeditions) Expeditions.record("creature", 1, { creature: a.type });
       UI.toast("🖌️ Brush brush! +2 fluff — the tuftle loves it!", 2600);
       a.fleeUntil = performance.now() + 1400;
       setTimeout(function () { a.brushed = false; }, 45000);
@@ -217,6 +218,7 @@ var Creatures = (function () {
       Game.grantXP(CONFIG.REWARDS.creatureXP);
       UI.toast(a.def.emoji + " " + a.def.cheer + "  " + loot.join("  "), 2800);
       Stats.recordGather();
+      if (window.Expeditions) Expeditions.record("creature", 1, { creature: a.type });
     }
   }
 

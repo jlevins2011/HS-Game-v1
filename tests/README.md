@@ -25,6 +25,7 @@ and the repo served on port 8905:
     node tests/test-balloon.js
     node tests/test-letters.js
     node tests/test-spell-live.js
+    node tests/test-expeditions.js
 
 Chromium comes from `PLAYWRIGHT_BROWSERS_PATH`; launch flags used here are
 `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --no-sandbox`.
@@ -74,6 +75,9 @@ can run in any order.
 - `test-letters.js` — the letter-name table, per-device overrides that stay out of
   the family backup, queue-vs-interrupt, and the Voice check screen.
 - `test-spell-live.js` — taps real letter tiles in a real spelling challenge.
+- `test-expeditions.js` — choice-driven session paths, learning steps, guaranteed
+  journal finds, postcards, persistent world markers, read-aloud answer safety,
+  session metrics, reloads, and explorer isolation.
 
 ## What these cannot do
 

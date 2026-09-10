@@ -111,6 +111,8 @@ var Game = (function () {
     UI.updateHud();
     UI.updateQuestHud();
     UI.updateHotbar();   // a child who loads in with materials sees the bench right away
+    Stats.startSession();
+    Expeditions.updateHud();
     Reports.maybeAutoSend();
     UI.showFirstDiscovery();
   }
@@ -122,6 +124,7 @@ var Game = (function () {
     Build.exitMode();
     UI.hideBuildSheet();
     Stats.tickPlaytime();
+    Stats.endSession();
     Store.saveNow();
   }
 
@@ -221,6 +224,7 @@ var Game = (function () {
     burst(o.x, o.y + def.rayY, o.z, def.drops0 ? 0xffd75e : 0x9adb7a, 8);
     if (res.done) {
       Stats.recordGather();
+      Expeditions.record("gather", 1, { item: Object.keys(res.drops)[0] });
       grantXP(CONFIG.REWARDS.gatherXP);
       var picnic = Economy.applyPicnic(res.drops);
       var parts = [];
